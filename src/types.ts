@@ -1,59 +1,61 @@
-import React from "react";
-import firebase from "firebase/compat/app";
+import React from 'react';
+import firebase from 'firebase/compat/app';
 
-// ✅ View pages in your app
-export type View =
-  | "products"
-  | "cart"
-  | "checkout"
-  | "about"
-  | "login"
-  | "profile"
-  | "driver"
-  | "staff"
-  | "manager";
+// General UI types
+export type View = 'products' | 'cart' | 'checkout' | 'about' | 'login' | 'profile' | 'driver' | 'staff' | 'manager';
 
-// ✅ Roles used in Firestore & ProtectedRoute
-export type UserRole = "customer" | "driver" | "staff" | "manager";
+// User and Auth types
+export type UserRole = 'customer' | 'driver' | 'staff' | 'manager';
 
-// ✅ Basic user info from Firebase Auth
 export interface User {
   uid: string;
   displayName: string | null;
   email: string | null;
 }
 
-// ✅ User data stored in Firestore
+
+// User as stored in the database
 export interface DBUser extends User {
-  role: UserRole;
+    role: UserRole;
+    shippingAddress?: ShippingAddress;
 }
 
-// ✅ Product and cart items
+
+// Product and Cart types
 export interface Product {
-  id: number;
+  id: string; // Firestore document ID
   name: string;
   description: string;
   price: number;
-  icon: React.FC<any>;
-  productType: "item" | "service";
+  iconName: string; // Name of the icon component
+  productType: 'item' | 'service';
+  stock?: number;       // 👈 optional stock count
+  imageUrl?: string;  
 }
 
 export interface CartItem extends Product {
   quantity: number;
 }
 
-// ✅ Order tracking types
-export type OrderStatus = "Placed" | "Assigned" | "Out for Delivery" | "Delivered";
+
+// Order types
+export type OrderStatus =
+  | 'pending'
+  | 'Placed'
+  | 'Assigned'
+  | 'Out for Delivery'
+  | 'Delivered';
+
 
 export interface ShippingAddress {
-  fullName: string;
-  address: string;
-  city: string;
-  zip: string;
+    fullName: string;
+    address: string;
+    city: string;
+    zip: string;
 }
 
 export interface Order {
-  id: string;
+  id: string; // Document ID from Firestore
   orderId: string;
   userId: string;
   customerName: string;
@@ -66,10 +68,24 @@ export interface Order {
   driverName?: string;
 }
 
-// ✅ Notification type
+// Pickup type
+export interface Pickup {
+  id: string;
+  userId: string;
+  customerName: string;
+  date: string;
+  time: string;
+  address: ShippingAddress;
+  status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled';
+  createdAt: firebase.firestore.Timestamp;
+}
+
+// Notification type
 export interface Notification {
-  id: number;
+  id: string;
+  userId: string;
   message: string;
   details: string;
-  status: "Accepted" | "Pending" | "Declined";
+  status: 'Accepted' | 'Pending' | 'Declined';
+  createdAt: firebase.firestore.Timestamp;
 }

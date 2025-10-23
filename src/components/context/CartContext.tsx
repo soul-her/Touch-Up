@@ -1,15 +1,12 @@
-
 import React, { createContext, useState, useContext, useCallback } from "react";
 import type { ReactNode } from "react";
-
-
-import type { Product, CartItem } from '../../types';
+import type { Product, CartItem } from "../../types";
 
 interface CartContextType {
   cartItems: CartItem[];
   addToCart: (product: Product) => void;
-  removeFromCart: (productId: number) => void;
-  updateQuantity: (productId: number, quantity: number) => void;
+  removeFromCart: (productId: string) => void; // ← changed
+  updateQuantity: (productId: string, quantity: number) => void; // ← changed
   clearCart: () => void;
   getCartTotal: () => number;
   getCartItemCount: () => number;
@@ -32,11 +29,11 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   }, []);
 
-  const removeFromCart = useCallback((productId: number) => {
+  const removeFromCart = useCallback((productId: string) => {
     setCartItems(prevItems => prevItems.filter(item => item.id !== productId));
   }, []);
 
-  const updateQuantity = useCallback((productId: number, quantity: number) => {
+  const updateQuantity = useCallback((productId: string, quantity: number) => {
     if (quantity <= 0) {
       removeFromCart(productId);
     } else {
@@ -67,7 +64,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     updateQuantity,
     clearCart,
     getCartTotal,
-    getCartItemCount
+    getCartItemCount,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
@@ -76,7 +73,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 export const useCart = () => {
   const context = useContext(CartContext);
   if (context === undefined) {
-    throw new Error('useCart must be used within a CartProvider');
+    throw new Error("useCart must be used within a CartProvider");
   }
   return context;
 };

@@ -1,175 +1,259 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from 'react';
 import { CartProvider } from "./components/context/CartContext";
-import Header from "./components/Header";
-import Footer from "./components/Footer";
-import ProductList from "./components/ProductList";
-import CartView from "./components/CartView";
-import CheckoutView from "./components/CheckoutView";
-import AboutView from "./components/AboutView";
-import LoginView from "./components/LoginView";
-import ProfileView from "./components/ProfileView";
-import DriverDashboard from "./components/dashboards/DriverDashboard";
-import StaffDashboard from "./components/dashboards/StaffDashboard";
-import ManagerDashboard from "./components/dashboards/ManagerDashboard";
-import SchedulePickupModal from "./components/SchedulePickupModal";
-import ProtectedRoute from "./components/ProtectedRoute";
+import Header from './components/Header';
+import Footer from './components/Footer';
+import ProductList from './components/ProductList';
+import CartView from './components/CartView';
+import CheckoutView from './components/CheckoutView';
+import AboutView from './components/AboutView';
+import LoginView from './components/LoginView';
+import ProfileView from './components/ProfileView';
+import DriverDashboard from './components/dashboards/DriverDashboard';
+import StaffDashboard from './components/dashboards/StaffDashboard';
+import ManagerDashboard from './components/dashboards/ManagerDashboard';
+import ProtectedRoute from './components/ProtectedRoute';
 
-import { auth, db } from "./firebase";
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-
-import type { View, User, UserRole, Notification, DBUser } from "./types";
+import { auth, db } from './firebase';
+import {
+  collection,
+  getDocs,
+  doc,
+  getDoc,
+  setDoc,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+} from 'firebase/firestore';
+import type { View, Notification, DBUser, ShippingAddress, Product } from './types';
 
 const App: React.FC = () => {
-  const [view, setView] = useState<View>("products");
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [view, setView] = useState<View>('products');
+  const [currentUser, setCurrentUser] = useState<DBUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [isScheduling, setIsScheduling] = useState(false);
   const [postLoginAction, setPostLoginAction] = useState<View | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isProductsLoading, setIsProductsLoading] = useState(true);
 
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: 1,
-      message: "Delivery Accepted",
-      details: "Your delivery for tomorrow is confirmed.",
-      status: "Accepted",
-    },
-    {
-      id: 2,
-      message: "Pickup Pending",
-      details: "Your container pickup is scheduled for Friday.",
-      status: "Pending",
-    },
-  ]);
+  // ✅ Fetch products
+  const fetchProducts = useCallback(async () => {
+    setIsProductsLoading(true);
+    try {
+      const snapshot = await getDocs(collection(db, 'products'));
+      const productsData = snapshot.docs.map(
+        (docSnap) =>
+          ({
+            id: docSnap.id,
+            ...docSnap.data(),
+          } as Product)
+      );
+      setProducts(productsData);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    } finally {
+      setIsProductsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    fetchProducts();
+  }, [fetchProducts]);
+
+  // ✅ Auth state listener
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       setIsAuthLoading(true);
-
       if (user) {
-        try {
-          const userDocRef = doc(db, "users", user.uid);
-          const userDocSnap = await getDoc(userDocRef);
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userDocRef);
 
-          let role: UserRole = "customer";
-          if (userDocSnap.exists()) {
-            const dbUser = userDocSnap.data() as DBUser;
-            role = dbUser.role;
-            setUserRole(role);
+        const dbUser: DBUser = {
+          uid: user.uid,
+          displayName: user.displayName ?? 'Unknown',
+          email: user.email ?? '',
+          role: 'customer',
+        };
+
+        if (userDoc.exists()) {
+          Object.assign(dbUser, userDoc.data());
+        }
+
+        setCurrentUser(dbUser);
+
+        if (postLoginAction) {
+          setView(postLoginAction);
+          setPostLoginAction(null);
+        } else {
+          const role = dbUser.role;
+          if (role === 'manager' || role === 'staff' || role === 'driver') {
+            setView(role);
           } else {
-            setUserRole("customer");
+            setView('products');
           }
-
-          setCurrentUser({
-            uid: user.uid,
-            displayName: user.displayName,
-            email: user.email,
-          });
-
-          if (postLoginAction) {
-            setView(postLoginAction);
-            setPostLoginAction(null);
-          } else {
-          if (role === "manager") setView("manager");
-        else if (role === "staff") setView("staff");
-        else if (role === "driver") setView("driver");
-        else setView("products");
-          }
-
-        } catch (err) {
-          console.error("Error fetching user role:", err);
-          setUserRole("customer");
-          setView("products");
         }
       } else {
-        // User signed out
         setCurrentUser(null);
-        setUserRole(null);
-        setView("products");
+        setView('products');
       }
-
       setIsAuthLoading(false);
     });
 
     return () => unsubscribe();
   }, [postLoginAction]);
 
-  const handleSchedule = () => {
-    if (currentUser) {
-      setIsScheduling(true);
-    } else {
-      setPostLoginAction("products");
-      alert("Please log in to schedule a pickup.");
-      setView("login");
+  // ✅ Notifications listener
+  useEffect(() => {
+    if (!currentUser) {
+      setNotifications([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'notifications'),
+      where('userId', '==', currentUser.uid),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const userNotifications = snapshot.docs.map(
+          (docSnap) =>
+            ({
+              id: docSnap.id,
+              ...docSnap.data(),
+            } as Notification)
+        );
+        setNotifications(userNotifications);
+      },
+      (error) => {
+        console.error('Error fetching notifications:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  // ✅ Schedule pickup
+  const handleConfirmSchedule = async (details: {
+    date: string;
+    time: string;
+    address: ShippingAddress;
+  }) => {
+    if (!currentUser) {
+      alert('You must be logged in to schedule a pickup.');
+      setView('login');
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, 'pickups'), {
+        userId: currentUser.uid,
+        customerName: currentUser.displayName || 'N/A',
+        date: details.date,
+        time: details.time,
+        address: details.address,
+        status: 'Pending',
+        createdAt: serverTimestamp(),
+      });
+
+      await setDoc(
+        doc(db, 'users', currentUser.uid),
+        { shippingAddress: details.address },
+        { merge: true }
+      );
+
+      await addDoc(collection(db, 'notifications'), {
+        userId: currentUser.uid,
+        message: 'Pickup Scheduled',
+        details: `For ${details.date} at ${details.time} to ${details.address.address}`,
+        status: 'Pending',
+        createdAt: serverTimestamp(),
+      });
+
+      alert('Pickup scheduled successfully!');
+    } catch (error) {
+      console.error('Error scheduling pickup: ', error);
+      alert('Failed to schedule pickup. Please try again.');
     }
   };
 
-  const handleConfirmSchedule = (details: { date: string; time: string }) => {
-    console.log("Scheduled pickup:", details);
-    setNotifications((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        message: "Pickup Scheduled",
-        details: `For ${details.date} at ${details.time}`,
-        status: "Pending",
-      },
-    ]);
-    setIsScheduling(false);
+  const getDashboardTitle = (view: View): string | null => {
+    switch (view) {
+      case 'driver':
+        return 'My Deliveries';
+      case 'staff':
+        return 'Order Fulfillment';
+      case 'manager':
+        return 'Manager Dashboard';
+      default:
+        return null;
+    }
   };
 
+  // ✅ View rendering
   const renderView = () => {
+    const userRole = currentUser?.role ?? null;
     switch (view) {
-      case "cart":
+      case 'cart':
         return <CartView setView={setView} />;
-      case "checkout":
+      case 'checkout':
         return currentUser ? (
           <CheckoutView setView={setView} currentUser={currentUser} />
         ) : (
           <LoginView setView={setView} postLoginAction="checkout" />
         );
-      case "about":
+      case 'about':
         return <AboutView />;
-      case "login":
+      case 'login':
         return <LoginView setView={setView} postLoginAction={postLoginAction} />;
-      case "profile":
+      case 'profile':
         return currentUser ? (
           <ProfileView currentUser={currentUser} />
         ) : (
           <LoginView setView={setView} postLoginAction="profile" />
         );
-      case "driver":
+      case 'driver':
         return (
-          <ProtectedRoute allowedRoles={["driver", "manager"]} userRole={userRole}>
+          <ProtectedRoute allowedRoles={['driver', 'manager']} userRole={userRole}>
             {currentUser && <DriverDashboard currentUser={currentUser} />}
           </ProtectedRoute>
         );
-      case "staff":
+      case 'staff':
         return (
-          <ProtectedRoute allowedRoles={["staff", "manager"]} userRole={userRole}>
+          <ProtectedRoute allowedRoles={['staff', 'manager']} userRole={userRole}>
             <StaffDashboard />
           </ProtectedRoute>
         );
-      case "manager":
+      case 'manager':
         return (
-          <ProtectedRoute allowedRoles={["manager"]} userRole={userRole}>
-            <ManagerDashboard currentUser={currentUser} />
+          <ProtectedRoute allowedRoles={['manager']} userRole={userRole}>
+            <ManagerDashboard products={products} refetchProducts={fetchProducts} />
           </ProtectedRoute>
         );
-      case "products":
       default:
-        return <ProductList onSchedule={handleSchedule} />;
+        return isProductsLoading ? (
+          <div className="text-center">Loading products...</div>
+        ) : (
+          <ProductList
+            products={products}
+            onSchedule={handleConfirmSchedule}
+            currentUser={currentUser}
+            setView={setView}
+          />
+        );
     }
   };
 
   if (isAuthLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        Loading...
-      </div>
-    );
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
+
+  const dashboardTitle = getDashboardTitle(view);
+  const userRole = currentUser?.role ?? null;
 
   return (
     <CartProvider>
@@ -181,16 +265,12 @@ const App: React.FC = () => {
           notifications={notifications}
         />
         <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {dashboardTitle && (
+            <h1 className="text-3xl font-bold text-gray-800 mb-6">{dashboardTitle}</h1>
+          )}
           {renderView()}
         </main>
         <Footer />
-
-        {isScheduling && (
-          <SchedulePickupModal
-            onClose={() => setIsScheduling(false)}
-            onSchedule={handleConfirmSchedule}
-          />
-        )}
       </div>
     </CartProvider>
   );

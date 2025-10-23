@@ -1,13 +1,14 @@
+
 import React, { useState } from 'react';
-import { useCart } from './context/CartContext';
+import { useCart } from '../components/context/CartContext';
 import type { Product } from '../types';
+import { iconMap } from '../components/icons/iconMap';
 
 interface ProductCardProps {
   product: Product;
-  onSchedule: () => void;
 }
 
-const ProductCard: React.FC<ProductCardProps> = ({ product, onSchedule }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const { addToCart } = useCart();
   const [isAdded, setIsAdded] = useState(false);
 
@@ -23,10 +24,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onSchedule }) => {
     'Empty Container Pickup': 'bg-green-100',
   };
 
+  const IconComponent = iconMap[product.iconName] || iconMap['DefaultIcon'];
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-6 flex flex-col items-center text-center transition-shadow hover:shadow-lg">
-        <div className={`w-20 h-20 rounded-lg flex items-center justify-center mb-6 ${iconColorClasses[product.name]}`}>
-            <product.icon />
+        <div className={`w-20 h-20 rounded-lg flex items-center justify-center mb-6 ${iconColorClasses[product.name] || 'bg-gray-100'}`}>
+            <IconComponent />
         </div>
         <h3 className="font-bold text-xl mb-2 text-gray-900">{product.name}</h3>
         <p className="text-gray-500 text-base flex-grow mb-4">{product.description}</p>
@@ -35,12 +38,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onSchedule }) => {
              <div className="flex justify-between items-center w-full">
                 <span className="text-xl font-bold text-gray-800">${product.price.toFixed(2)}</span>
                  {product.productType === 'service' ? (
-                    <button
-                        onClick={onSchedule}
-                        className="px-4 py-2 rounded-lg font-semibold text-white transition-colors duration-300 bg-green-500 hover:bg-green-600"
+                    <span
+                        className="px-4 py-2 rounded-lg font-semibold text-white bg-green-500 cursor-default"
                     >
-                        Schedule
-                    </button>
+                        Schedule Below
+                    </span>
                 ) : (
                     <button
                         onClick={handleAddToCart}

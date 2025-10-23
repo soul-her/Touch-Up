@@ -1,43 +1,18 @@
+
 import React from 'react';
 import ProductCard from './ProductCard';
-import type { Product } from '../types';
-import RefillIcon from './icons/RefillIcon';
-import GallonIcon from './icons/GallonIcon';
-import PickupIcon from './icons/PickupIcon';
-
-const products: Product[] = [
-  {
-    id: 1,
-    name: 'Water Refill',
-    description: 'For your reusable gallons.',
-    price: 5.99,
-    icon: RefillIcon,
-    productType: 'item',
-  },
-  {
-    id: 2,
-    name: 'New Gallon',
-    description: 'A new, pre-filled container.',
-    price: 14.99,
-    icon: GallonIcon,
-    productType: 'item',
-  },
-  {
-    id: 3,
-    name: 'Empty Container Pickup',
-    description: 'We\'ll handle the return.',
-    price: 1.99,
-    icon: PickupIcon,
-    productType: 'service',
-  },
-];
+import SchedulePickupForm from './SchedulePickupForm';
+import type { Product, DBUser, ShippingAddress, View } from '../types';
 
 interface ProductListProps {
-  onSchedule: () => void;
+  products: Product[];
+  onSchedule: (details: { date: string; time: string; address: ShippingAddress; }) => void;
+  currentUser: DBUser | null;
+  setView: (view: View) => void;
 }
 
 
-const ProductList: React.FC<ProductListProps> = ({ onSchedule }) => {
+const ProductList: React.FC<ProductListProps> = ({ products, onSchedule, currentUser, setView }) => {
   return (
     <div>
       <section className="relative text-center text-white p-12 md:p-20 rounded-2xl mb-16 overflow-hidden">
@@ -54,9 +29,14 @@ const ProductList: React.FC<ProductListProps> = ({ onSchedule }) => {
       <h2 className="text-3xl font-bold mb-10 text-gray-800">Our Products</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {products.map(product => (
-          <ProductCard key={product.id} product={product} onSchedule={onSchedule} />
+          <ProductCard key={product.id} product={product} />
         ))}
       </div>
+
+      <section className="mt-20">
+        <SchedulePickupForm onSchedule={onSchedule} currentUser={currentUser} setView={setView} />
+      </section>
+
     </div>
   );
 };
