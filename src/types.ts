@@ -30,7 +30,7 @@ export interface Product {
   iconName: string; // Name of the icon component
   productType: 'item' | 'service';
   stock?: number;       // 👈 optional stock count
-  imageUrl?: string;  
+  image?: string;  
 }
 
 export interface CartItem extends Product {
@@ -66,6 +66,8 @@ export interface Order {
   createdAt: firebase.firestore.Timestamp;
   driverId?: string;
   driverName?: string;
+  completedAt?: firebase.firestore.Timestamp;
+  
 }
 
 // Pickup type

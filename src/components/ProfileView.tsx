@@ -1,154 +1,259 @@
 import React, { useState, useEffect } from "react";
+import { db } from "../firebase";
 import {
   collection,
   query,
   where,
-  orderBy,
   onSnapshot,
+  orderBy,
 } from "firebase/firestore";
-import { db } from "../firebase";
-import type { User, Order } from "../types";
+import type { Order } from "../types";
 
-import UserCircleIcon from "./icons/UserIcon";
-import PencilIcon from "./icons/PencilIcon";
-import ListBulletIcon from "./icons/ListBulletIcon";
-
-interface ProfileViewProps {
-  currentUser: User | null;
+interface Pickup {
+  id: string;
+  address: {
+    address: string;
+    city: string;
+    fullName: string;
+    zip: string;
+  };
+  customerName: string;
+  date: string;
+  time: string;
+  status: string;
+  userId: string;
+  createdAt: any;
 }
 
-const ProfileView: React.FC<ProfileViewProps> = ({ currentUser }) => {
+interface ProfileViewProps {
+  currentUser: { uid: string; email?: string } | null;
+  setView: (view: string) => void;
+}
+
+const ProfileView: React.FC<ProfileViewProps> = ({ currentUser, setView }) => {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [pickups, setPickups] = useState<Pickup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // 🔹 Fetch ORDERS
   useEffect(() => {
-    if (!currentUser || !currentUser.uid) return;
+    if (!currentUser?.uid) return;
 
-    const ordersQuery = query(
+    const q = query(
       collection(db, "orders"),
       where("userId", "==", currentUser.uid),
       orderBy("createdAt", "desc")
     );
 
-    const unsubscribe = onSnapshot(
-      ordersQuery,
-      (snapshot) => {
-        const userOrders = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Order[];
-
-        console.log("Fetched orders:", userOrders);
-        setOrders(userOrders);
-        setIsLoading(false);
-      },
-      (error) => {
-        console.error("Error fetching orders:", error);
-        setIsLoading(false);
-      }
-    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedOrders = snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as Order)
+      );
+      setOrders(fetchedOrders);
+      setIsLoading(false);
+    });
 
     return () => unsubscribe();
   }, [currentUser?.uid]);
 
-  const getStatusColor = (status?: string) => {
-    switch (status) {
-      case "Delivered":
-        return "bg-green-100 text-green-800";
-      case "Out for Delivery":
-        return "bg-blue-100 text-blue-800";
-      case "Assigned":
-        return "bg-indigo-100 text-indigo-800";
-      case "Placed":
-        return "bg-yellow-100 text-yellow-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
+  // 🔹 Fetch PICKUPS
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+
+    const q = query(
+      collection(db, "pickups"),
+      where("userId", "==", currentUser.uid),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedPickups = snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as Pickup)
+      );
+      setPickups(fetchedPickups);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser?.uid]);
+
+  if (isLoading) {
+    return <p className="text-center mt-10 text-gray-600">Loading profile...</p>;
+  }
+
+  // 🔹 Split active vs completed
+  const activeOrders = orders.filter(
+    (o) => o.status !== "Delivered" && o.status !== "Completed"
+  );
+  const completedOrders = orders.filter(
+    (o) => o.status === "Delivered" || o.status === "Completed"
+  );
+
+  const activePickups = pickups.filter(
+    (p) =>
+      !["Completed", "Delivered"].includes(p.status)
+  );
+  const completedPickups = pickups.filter((p) =>
+    ["Completed", "Delivered"].includes(p.status)
+  );
 
   return (
-    <div className="max-w-4xl mx-auto">
-      {/* Profile Card */}
-      <div className="bg-white p-8 rounded-xl shadow-xl mb-8">
-        <div className="flex flex-col items-center md:flex-row md:items-start md:gap-8">
-          <UserCircleIcon />
-          <div className="text-center md:text-left mt-4 md:mt-0">
-            <h1 className="text-3xl font-bold text-gray-800">
-              {currentUser?.displayName || "User"}
-            </h1>
-            <p className="text-gray-600 mt-1">{currentUser?.email}</p>
-            <button className="mt-4 inline-flex items-center gap-2 text-sm text-blue-600 hover:underline font-semibold">
-              <PencilIcon />
-              Edit Profile
-            </button>
-          </div>
-        </div>
+    <div className="max-w-4xl mx-auto p-6 bg-white rounded-xl shadow-md mt-10">
+      <h1 className="text-3xl font-bold text-gray-800 mb-6">My Profile</h1>
+
+      {/* 🔹 User Info */}
+      <div className="mb-8">
+        <p className="text-gray-700">
+          <strong>Email:</strong> {currentUser?.email}
+        </p>
       </div>
 
-      {/* Order History */}
-      <div className="bg-white p-8 rounded-xl shadow-xl">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3 border-b pb-4">
-          <ListBulletIcon />
-          Order History
-        </h2>
-
-        {isLoading ? (
-          <p>Loading your orders...</p>
-        ) : orders.length > 0 ? (
-          <div className="space-y-6">
-            {orders.map((order) => (
-              <div key={order.id} className="border rounded-lg p-4">
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <p className="font-bold text-lg text-gray-800">
-                      Order #{order.id}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      Placed on{" "}
-                      {order.createdAt?.seconds
-                        ? new Date(order.createdAt.seconds * 1000).toLocaleDateString()
-                        : "N/A"}
-                    </p>
-                  </div>
-                  <span
-                    className={`text-sm font-bold px-3 py-1 rounded-full ${getStatusColor(
-                      order.status
-                    )}`}
-                  >
-                    {order.status || "Placed"}
-                  </span>
-                </div>
-
-                {order.driverName && (
-                  <p className="text-sm text-gray-600 mb-2">
-                    Driver:{" "}
-                    <span className="font-medium">{order.driverName}</span>
-                  </p>
-                )}
-
-                <div className="text-sm text-gray-700 border-t pt-2">
-                  {order.items?.map((item) => (
-                    <div key={item.id} className="flex justify-between">
-                      <span>
-                        {item.name} (x{item.quantity})
-                      </span>
-                      <span>₱{(item.price * item.quantity).toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="font-bold text-right mt-2 text-gray-800">
-                  Total: ₱{order.total?.toFixed(2) || "0.00"}
-                </div>
+      {/* ===========================
+          ORDERS SECTION
+      ============================ */}
+      <h2 className="text-2xl font-semibold text-gray-800 mb-4">
+        Active Orders
+      </h2>
+      {activeOrders.length === 0 ? (
+        <p className="text-gray-500 mb-8">No active orders.</p>
+      ) : (
+        <div className="space-y-5 mb-10">
+          {activeOrders.map((order) => (
+            <div
+              key={order.id}
+              className="p-4 border rounded-lg shadow-sm bg-blue-50"
+            >
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-semibold text-gray-800">
+                  Order #{order.orderId || order.id}
+                </h3>
+                <span className="px-3 py-1 text-sm font-medium rounded-full bg-yellow-100 text-yellow-800">
+                  {order.status}
+                </span>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="p-10 border-2 border-dashed border-gray-300 rounded-lg text-center text-gray-500">
-            <p>Your past orders will appear here.</p>
-            <p className="text-sm mt-1">You haven't placed any orders yet.</p>
-          </div>
-        )}
+
+              <ul className="text-sm text-gray-600 border-t mt-2 pt-2">
+                {order.items?.map((item) => (
+                  <li key={item.id}>
+                    {item.name} (x{item.quantity}) - ₱
+                    {(item.price * item.quantity).toFixed(2)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <h2 className="text-2xl font-semibold text-gray-800 mb-4">
+        Completed Orders
+      </h2>
+      {completedOrders.length === 0 ? (
+        <p className="text-gray-500 mb-8">No completed orders yet.</p>
+      ) : (
+        <div className="space-y-5 mb-10">
+          {completedOrders.map((order) => (
+            <div
+              key={order.id}
+              className="p-4 border rounded-lg shadow-sm bg-green-50"
+            >
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-semibold text-gray-800">
+                  Order #{order.orderId || order.id}
+                </h3>
+                <span className="px-3 py-1 text-sm font-medium rounded-full bg-green-100 text-green-800">
+                  {order.status}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ===========================
+          PICKUPS SECTION
+      ============================ */}
+      <h2 className="text-2xl font-semibold text-gray-800 mb-4">
+        Active Pickups
+      </h2>
+      {activePickups.length === 0 ? (
+        <p className="text-gray-500 mb-8">No active pickups.</p>
+      ) : (
+        <div className="space-y-5 mb-10">
+          {activePickups.map((pickup) => (
+            <div
+              key={pickup.id}
+              className="p-4 border rounded-lg shadow-sm bg-purple-50"
+            >
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-semibold text-gray-800">
+                  Pickup for {pickup.customerName}
+                </h3>
+                <span
+                  className={`px-3 py-1 text-sm font-medium rounded-full ${
+                    pickup.status === "On the Way"
+                      ? "bg-blue-100 text-blue-800"
+                      : pickup.status === "Picked Up"
+                      ? "bg-green-100 text-green-800"
+                      : "bg-yellow-100 text-yellow-800"
+                  }`}
+                >
+                  {pickup.status}
+                </span>
+              </div>
+
+              <p className="text-sm text-gray-700">
+                <strong>Date:</strong> {pickup.date} |{" "}
+                <strong>Time:</strong> {pickup.time}
+              </p>
+              <p className="text-sm text-gray-700 mt-1">
+                <strong>Address:</strong> {pickup.address.address}, {pickup.address.city}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <h2 className="text-2xl font-semibold text-gray-800 mb-4">
+        Completed Pickups
+      </h2>
+      {completedPickups.length === 0 ? (
+        <p className="text-gray-500 mb-8">No completed pickups yet.</p>
+      ) : (
+        <div className="space-y-5">
+          {completedPickups.map((pickup) => (
+            <div
+              key={pickup.id}
+              className="p-4 border rounded-lg shadow-sm bg-green-50"
+            >
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-semibold text-gray-800">
+                  Pickup for {pickup.customerName}
+                </h3>
+                <span className="px-3 py-1 text-sm font-medium rounded-full bg-green-100 text-green-800">
+                  {pickup.status}
+                </span>
+              </div>
+
+              <p className="text-sm text-gray-700">
+                <strong>Date:</strong> {pickup.date} |{" "}
+                <strong>Time:</strong> {pickup.time}
+              </p>
+              <p className="text-sm text-gray-700 mt-1">
+                <strong>Address:</strong> {pickup.address.address}, {pickup.address.city}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 🔹 Back Button */}
+      <div className="mt-8 text-center">
+        <button
+          onClick={() => setView("products")}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          Back to Shop
+        </button>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   collection,
   query,
@@ -8,24 +8,30 @@ import {
   doc,
   updateDoc,
 } from "firebase/firestore";
-import { db } from "../../firebase";
+import { signOut } from "firebase/auth";
+import { db, auth } from "../../firebase";
 import type { Order, DBUser } from "../../types";
 
-const StaffDashboard: React.FC = () => {
+const StaffDashboard: React.FC<{ setView: (view: string) => void }> = ({
+  setView,
+}) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [drivers, setDrivers] = useState<DBUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // 🔹 Fetch orders and drivers in real-time
   useEffect(() => {
     setIsLoading(true);
 
     try {
       // --- Orders Listener ---
       const ordersRef = collection(db, "orders");
+
+      // 👇 include Delivered in query
       const ordersQuery = query(
         ordersRef,
-        where("status", "in", ["pending", "Placed", "Assigned"]),
+        where("status", "in", ["pending", "Placed", "Assigned", "Delivered"]),
         orderBy("createdAt", "desc")
       );
 
@@ -39,19 +45,11 @@ const StaffDashboard: React.FC = () => {
                 ...docSnap.data(),
               } as Order)
           );
-
-          console.log("📦 Orders fetched (raw):", ordersData);
           setOrders(ordersData);
         },
         (err) => {
           console.error("🔥 Firestore query error (orders):", err);
-          if (err.code === "failed-precondition") {
-            setError(
-              "Firestore index required. Please create the suggested index in the Firebase Console."
-            );
-          } else {
-            setError("Failed to load orders.");
-          }
+          setError("Failed to load orders.");
         }
       );
 
@@ -62,11 +60,18 @@ const StaffDashboard: React.FC = () => {
       const unsubscribeDrivers = onSnapshot(
         driversQuery,
         (snapshot) => {
-          const driversData = snapshot.docs.map(
-            (docSnap) => docSnap.data() as DBUser
-          );
-          console.log("🚗 Drivers fetched:", driversData);
-          setDrivers(driversData);
+          const driverData = snapshot.docs.map((docSnap) => {
+            const data = docSnap.data();
+            return {
+              id: docSnap.id,
+              uid: data.uid || docSnap.id,
+              displayName: data.displayName || data.name || "Unnamed Driver",
+              email: data.email || "",
+              role: data.role || "driver",
+              ...data,
+            } as DBUser;
+          });
+          setDrivers(driverData);
           setIsLoading(false);
         },
         (err) => {
@@ -87,7 +92,7 @@ const StaffDashboard: React.FC = () => {
     }
   }, []);
 
-  // --- Assign driver ---
+  // 🔹 Assign driver
   const handleAssignDriver = async (orderId: string, driver: DBUser) => {
     if (!driver) return;
     try {
@@ -104,7 +109,19 @@ const StaffDashboard: React.FC = () => {
     }
   };
 
-  // --- Status badge colors ---
+  // 🔹 Logout
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      alert("✅ Logged out successfully!");
+      setView("home");
+    } catch (err) {
+      console.error("Logout error:", err);
+      alert("❌ Failed to log out.");
+    }
+  };
+
+  // 🔹 Status color
   const getStatusColor = (status: string) => {
     switch (status) {
       case "pending":
@@ -112,44 +129,63 @@ const StaffDashboard: React.FC = () => {
       case "Placed":
         return "bg-blue-100 text-blue-800";
       case "Assigned":
+        return "bg-indigo-100 text-indigo-800";
+      case "Delivered":
         return "bg-green-100 text-green-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
   };
 
-  // --- Safely extract name and address (works with different field structures) ---
+  // 🔹 Safely get name
   const getCustomerName = (order: any): string => {
     return (
       order.customerName ||
       order.name ||
       order.customer?.fullName ||
       order.userName ||
-      "N/A"
+      order.userEmail ||
+      "Unknown"
     );
   };
 
+  // 🔹 Safely format address
   const getAddress = (order: any): string => {
-    if (typeof order.shippingAddress === "string") return order.shippingAddress;
-    if (order.shippingAddress)
-      return `${order.shippingAddress.address || order.shippingAddress.street || ""}${
-        order.shippingAddress.city ? ", " + order.shippingAddress.city : ""
-      }`.trim();
-    if (order.address) return order.address;
-    if (order.shipping?.street)
-      return `${order.shipping.street}, ${order.shipping.city || ""}`;
+    const address = order.address || order.shippingAddress || order.shipping;
+    if (!address) return "No address available";
+    if (typeof address === "string") return address;
+    if (typeof address === "object") {
+      const { street, barangay, city, province, postalCode } = address;
+      return [street, barangay, city, province, postalCode]
+        .filter(Boolean)
+        .join(", ");
+    }
     return "No address";
   };
 
+  // 🔹 Format date
+  const formatDate = (timestamp?: { seconds: number; nanoseconds: number }) => {
+    if (!timestamp) return "N/A";
+    const date = new Date(timestamp.seconds * 1000);
+    return date.toLocaleString();
+  };
+
   return (
-    <div className="bg-white p-8 rounded-lg shadow-xl max-w-7xl mx-auto">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">
+    <div className="bg-white p-6 rounded-xl shadow-xl max-w-7xl mx-auto relative min-h-screen">
+      <button
+        onClick={handleLogout}
+        className="fixed bottom-6 right-6 bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-full font-semibold shadow-lg transition md:top-6 md:right-6 md:bottom-auto"
+      >
+        Logout
+      </button>
+
+      <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">
         Staff Dashboard
       </h1>
 
       {isLoading && <p className="text-gray-600">Loading orders...</p>}
       {error && (
-        <p className="text-red-600 font-medium mb-4 bg-red-50 p-3 rounded-md border border-red-200">
+        <p className="text-red-600 bg-red-50 border border-red-200 rounded-md p-3 mb-4">
           {error}
         </p>
       )}
@@ -157,35 +193,48 @@ const StaffDashboard: React.FC = () => {
       {!isLoading && !error && (
         <div className="overflow-x-auto">
           {orders.length > 0 ? (
-            <table className="min-w-full bg-white border border-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full border border-gray-200 rounded-lg">
+              <thead className="bg-blue-600 text-white">
                 <tr>
-                  <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-gray-600">
+                  <th className="py-3 px-4 text-left text-sm font-semibold">
                     Order ID
                   </th>
-                  <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-gray-600">
+                  <th className="py-3 px-4 text-left text-sm font-semibold">
                     Customer
                   </th>
-                  <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-gray-600">
+                  <th className="py-3 px-4 text-left text-sm font-semibold">
                     Address
                   </th>
-                  <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-gray-600">
+                  <th className="py-3 px-4 text-left text-sm font-semibold">
+                    Total
+                  </th>
+                  <th className="py-3 px-4 text-left text-sm font-semibold">
+                    Date
+                  </th>
+                  <th className="py-3 px-4 text-left text-sm font-semibold">
                     Status
                   </th>
-                  <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-gray-600">
-                    Assign Driver
+                  <th className="py-3 px-4 text-left text-sm font-semibold">
+                    Driver
                   </th>
                 </tr>
               </thead>
-              <tbody className="text-gray-700">
+              <tbody className="text-gray-800">
                 {orders.map((order) => (
-                  <tr key={order.id} className="border-b hover:bg-gray-50">
+                  <tr
+                    key={order.id}
+                    className="border-b hover:bg-gray-50 transition duration-150"
+                  >
                     <td className="py-3 px-4 font-medium">{order.id}</td>
                     <td className="py-3 px-4">{getCustomerName(order)}</td>
                     <td className="py-3 px-4 text-sm">{getAddress(order)}</td>
+                    <td className="py-3 px-4 text-sm">₱{order.total}</td>
+                    <td className="py-3 px-4 text-sm">
+                      {formatDate(order.createdAt)}
+                    </td>
                     <td className="py-3 px-4">
                       <span
-                        className={`text-xs font-bold px-3 py-1 rounded-full ${getStatusColor(
+                        className={`text-xs font-semibold px-3 py-1 rounded-full ${getStatusColor(
                           order.status
                         )}`}
                       >
@@ -193,7 +242,8 @@ const StaffDashboard: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-3 px-4">
-                      {order.status === "pending" || order.status === "Placed" ? (
+                      {order.status === "pending" ||
+                      order.status === "Placed" ? (
                         drivers.length > 0 ? (
                           <select
                             onChange={(e) => {
@@ -204,10 +254,10 @@ const StaffDashboard: React.FC = () => {
                                 handleAssignDriver(order.id, selectedDriver);
                             }}
                             defaultValue=""
-                            className="p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            className="p-2 border border-gray-300 rounded-md text-sm"
                           >
                             <option value="" disabled>
-                              Select a driver...
+                              Select driver...
                             </option>
                             {drivers.map((driver) => (
                               <option key={driver.uid} value={driver.uid}>
@@ -221,7 +271,7 @@ const StaffDashboard: React.FC = () => {
                           </span>
                         )
                       ) : (
-                        <span className="font-semibold text-gray-800">
+                        <span className="font-semibold text-gray-700">
                           {order.driverName || "Assigned"}
                         </span>
                       )}
@@ -231,9 +281,9 @@ const StaffDashboard: React.FC = () => {
               </tbody>
             </table>
           ) : (
-            <div className="p-10 border-2 border-dashed border-gray-300 rounded-lg text-center text-gray-500">
-              <p className="font-semibold">No orders require assignment.</p>
-              <p className="text-sm mt-1">Check back later for new orders.</p>
+            <div className="p-10 text-center border-2 border-dashed border-gray-300 rounded-lg text-gray-500">
+              <p className="font-semibold">No orders available</p>
+              <p className="text-sm">Check back later for new orders.</p>
             </div>
           )}
         </div>

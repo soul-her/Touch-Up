@@ -1,255 +1,119 @@
 import React, { useState, useEffect } from "react";
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-  doc,
-  updateDoc,
-  FirestoreError,
-} from "firebase/firestore";
-import { db } from "../../firebase";
-import type { Order, User, OrderStatus, Pickup } from "../../types";
+import { db, auth } from "../../firebase";
+import { collection, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
+import { signOut } from "firebase/auth";
+import DriverOrders from "./DriverOrders";
+import DriverPickups from "./DriverPickups";
+import type { User } from "../../types";
+import { Menu, X } from "lucide-react"; // For icons
 
-interface DriverDashboardProps {
-  currentUser: User;
-}
+const DriverDashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
+  const [view, setView] = useState<"orders" | "pickups">("orders");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-const DriverDashboard: React.FC<DriverDashboardProps> = ({ currentUser }) => {
-  const [assignedOrders, setAssignedOrders] = useState<Order[]>([]);
-  const [pickups, setPickups] = useState<Pickup[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
+  // ✅ Automatically assign pickups to the current driver (if unassigned)
   useEffect(() => {
-    if (!currentUser) return;
+    const autoAssignPickups = async () => {
+      if (!currentUser?.uid) return;
 
-    // --- Orders Query ---
-    const ordersQuery = query(
-      collection(db, "orders"),
-      where("driverId", "==", currentUser.uid),
-      where("status", "in", ["Assigned", "Out for Delivery"]),
-      orderBy("createdAt", "desc")
-    );
+      try {
+        const pickupsRef = collection(db, "pickups");
+        const q = query(pickupsRef, where("driverId", "==", null));
+        const snapshot = await getDocs(q);
 
-    const unsubscribeOrders = onSnapshot(
-      ordersQuery,
-      (snapshot) => {
-        const ordersData = snapshot.docs.map(
-          (doc) => ({ id: doc.id, ...doc.data() } as Order)
-        );
-        console.log("🚚 Orders fetched:", ordersData);
-        setAssignedOrders(ordersData);
-        setIsLoading(false);
-      },
-      (error: FirestoreError) => {
-        console.error("🔥 Error fetching assigned orders:", error);
-        setIsLoading(false);
+        const batchUpdates = snapshot.docs.map(async (pickupDoc) => {
+          const pickupRef = doc(db, "pickups", pickupDoc.id);
+          await updateDoc(pickupRef, { driverId: currentUser.uid });
+        });
+
+        await Promise.all(batchUpdates);
+      } catch (err) {
+        console.error("Auto-assign error:", err);
       }
-    );
-
-    // --- Pickups Query ---
-    const pickupsQuery = query(
-      collection(db, "pickups"),
-      where("status", "==", "Scheduled"),
-      orderBy("date", "asc")
-    );
-
-    const unsubscribePickups = onSnapshot(
-      pickupsQuery,
-      (snapshot) => {
-        const pickupsData = snapshot.docs.map(
-          (doc) => ({ id: doc.id, ...doc.data() } as Pickup)
-        );
-        console.log("📦 Pickups fetched:", pickupsData);
-        setPickups(pickupsData);
-      },
-      (error: FirestoreError) => {
-        console.error("🔥 Error fetching pickups:", error);
-      }
-    );
-
-    return () => {
-      unsubscribeOrders();
-      unsubscribePickups();
     };
-  }, [currentUser]);
 
-  // --- Update Delivery Status ---
-  const handleStatusUpdate = async (orderId: string, newStatus: OrderStatus) => {
-    try {
-      const orderRef = doc(db, "orders", orderId);
-      await updateDoc(orderRef, { status: newStatus });
-    } catch (error) {
-      console.error("Error updating status:", error);
-      alert("Failed to update order status.");
-    }
-  };
+    autoAssignPickups();
+  }, [currentUser?.uid]);
 
-  // --- Update Pickup Status ---
-  const handlePickupStatusUpdate = async (pickupId: string) => {
-    try {
-      const pickupRef = doc(db, "pickups", pickupId);
-      await updateDoc(pickupRef, { status: "Completed" });
-    } catch (error) {
-      console.error("Error completing pickup:", error);
-      alert("Failed to update pickup status.");
-    }
-  };
-
-  // --- Render address safely (handles both object or string) ---
-  const renderAddress = (order: any): string => {
-    if (order.shippingAddress) {
-      const { address, city, zip } = order.shippingAddress;
-      return [address, city, zip].filter(Boolean).join(", ");
-    }
-    if (order.address) return order.address;
-    return "No address";
-  };
-
-  const renderPickupAddress = (address: any): string => {
-    if (!address) return "No address";
-    if (typeof address === "string") return address;
-    return [address.fullName, address.address, address.city, address.zip]
-      .filter(Boolean)
-      .join(", ");
+  const handleLogout = async () => {
+    await signOut(auth);
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-12 p-8">
-      {/* Deliveries Section */}
-      <div className="bg-white p-8 rounded-lg shadow-xl">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6 border-b pb-4">
-          My Deliveries
-        </h1>
+    <div className="flex min-h-screen bg-gray-100 relative">
+      {/* ========== Sidebar ========== */}
+      <aside
+        className={`fixed z-30 md:static md:translate-x-0 top-0 left-0 h-full w-64 bg-gray-800 text-white flex flex-col transform transition-transform duration-300 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        }`}
+      >
+        <div className="flex justify-between items-center p-4 border-b border-gray-700">
+          <h2 className="text-2xl font-bold">Driver Panel</h2>
+          <button
+            className="md:hidden text-gray-300 hover:text-white"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <X size={24} />
+          </button>
+        </div>
 
-        {isLoading ? (
-          <p>Loading assigned deliveries...</p>
-        ) : assignedOrders.length === 0 ? (
-          <div className="p-10 border-2 border-dashed border-gray-300 rounded-lg text-center text-gray-500">
-            <p>You have no active deliveries assigned.</p>
-          </div>
+        <nav className="flex-1 p-4 space-y-3">
+          <button
+            onClick={() => {
+              setView("orders");
+              setSidebarOpen(false);
+            }}
+            className={`w-full text-left px-4 py-2 rounded-lg transition ${
+              view === "orders" ? "bg-blue-600" : "hover:bg-gray-700"
+            }`}
+          >
+            Orders
+          </button>
+          <button
+            onClick={() => {
+              setView("pickups");
+              setSidebarOpen(false);
+            }}
+            className={`w-full text-left px-4 py-2 rounded-lg transition ${
+              view === "pickups" ? "bg-blue-600" : "hover:bg-gray-700"
+            }`}
+          >
+            Pickups
+          </button>
+        </nav>
+
+        <div className="p-4 border-t border-gray-700">
+          <button
+            onClick={handleLogout}
+            className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg"
+          >
+            Log out
+          </button>
+        </div>
+      </aside>
+
+      {/* ========== Main Content ========== */}
+      <main className="flex-1 p-6 md:ml-0">
+        {/* Top bar for mobile */}
+        <div className="flex items-center justify-between mb-6">
+          <button
+            className="md:hidden text-gray-800"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Menu size={28} />
+          </button>
+          <h1 className="text-3xl font-bold text-gray-800">
+            Welcome, {currentUser?.displayName || "Driver"}
+          </h1>
+        </div>
+
+        {/* Render Selected View */}
+        {view === "orders" ? (
+          <DriverOrders currentUser={currentUser} />
         ) : (
-          <div className="space-y-6">
-            {assignedOrders.map((order) => (
-              <div
-                key={order.id}
-                className="border rounded-lg p-4 bg-gray-50 hover:shadow-md transition"
-              >
-                <div className="flex flex-col md:flex-row justify-between md:items-center">
-                  <div>
-                    <p className="font-bold text-lg text-gray-800">
-                      {order.orderId || order.id}
-                    </p>
-                    <p className="text-gray-600">
-                      Customer:{" "}
-                      <span className="font-medium">
-                        {order.customerName || order.name || "Unknown"}
-                      </span>
-                    </p>
-                    <p className="text-gray-600">
-                      Address:{" "}
-                      <span className="font-medium">
-                        {renderAddress(order)}
-                      </span>
-                    </p>
-                  </div>
-                  <div className="mt-4 md:mt-0 flex items-center gap-4">
-                    <span
-                      className={`text-sm font-bold px-3 py-1 rounded-full ${
-                        order.status === "Assigned"
-                          ? "bg-indigo-100 text-indigo-800"
-                          : "bg-blue-100 text-blue-800"
-                      }`}
-                    >
-                      {order.status}
-                    </span>
-                    {order.status === "Assigned" && (
-                      <button
-                        onClick={() =>
-                          handleStatusUpdate(order.id, "Out for Delivery")
-                        }
-                        className="bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors"
-                      >
-                        Start Delivery
-                      </button>
-                    )}
-                    {order.status === "Out for Delivery" && (
-                      <button
-                        onClick={() =>
-                          handleStatusUpdate(order.id, "Delivered")
-                        }
-                        className="bg-green-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-600 transition-colors"
-                      >
-                        Mark as Delivered
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <DriverPickups currentUser={currentUser} />
         )}
-      </div>
-
-      {/* Pickups Section */}
-      <div className="bg-white p-8 rounded-lg shadow-xl">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6 border-b pb-4">
-          Scheduled Pickups
-        </h1>
-
-        {isLoading ? (
-          <p>Loading scheduled pickups...</p>
-        ) : pickups.length === 0 ? (
-          <div className="p-10 border-2 border-dashed border-gray-300 rounded-lg text-center text-gray-500">
-            <p>There are no scheduled pickups.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-white border">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-gray-600">
-                    Customer
-                  </th>
-                  <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-gray-600">
-                    Address
-                  </th>
-                  <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-gray-600">
-                    Date & Time
-                  </th>
-                  <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-gray-600">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="text-gray-700">
-                {pickups.map((pickup) => (
-                  <tr key={pickup.id} className="border-b hover:bg-gray-50">
-                    <td className="py-3 px-4">
-                      {pickup.customerName || "Unknown"}
-                    </td>
-                    <td className="py-3 px-4">
-                      {renderPickupAddress(pickup.address)}
-                    </td>
-                    <td className="py-3 px-4 text-sm">
-                      {`${pickup.date || ""} at ${pickup.time || ""}`}
-                    </td>
-                    <td className="py-3 px-4">
-                      <button
-                        onClick={() => handlePickupStatusUpdate(pickup.id)}
-                        className="bg-green-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-600 transition-colors"
-                      >
-                        Mark as Completed
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      </main>
     </div>
   );
 };

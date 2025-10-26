@@ -1,19 +1,9 @@
 import React, { useState } from "react";
 import { db } from "../firebase";
-import {
-  collection,
-  addDoc,
-  serverTimestamp,
-} from "firebase/firestore";
-import {
-  getStorage,
-  ref,
-  uploadBytes,
-  getDownloadURL,
-} from "firebase/storage";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 interface AdminAddProductProps {
-  onProductAdded?: () => void; // optional callback to refresh product list
+  onProductAdded?: () => void;
 }
 
 const AdminAddProduct: React.FC<AdminAddProductProps> = ({ onProductAdded }) => {
@@ -21,35 +11,21 @@ const AdminAddProduct: React.FC<AdminAddProductProps> = ({ onProductAdded }) => 
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState<number | "">("");
   const [stock, setStock] = useState<number | "">("");
-  const [productType, setProductType] = useState("item");
-  const [file, setFile] = useState<File | null>(null);
+  const [imageURL, setImageURL] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const storage = getStorage();
-
-  // 🔹 Upload image to Firebase Storage
-  const uploadImage = async (file: File): Promise<string> => {
-    const storageRef = ref(storage, `products/${Date.now()}_${file.name}`);
-    await uploadBytes(storageRef, file);
-    return await getDownloadURL(storageRef);
-  };
-
-  // 🔹 Submit new product
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      let imageURL = "";
-      if (file) imageURL = await uploadImage(file);
-
       await addDoc(collection(db, "products"), {
         name,
         description,
         price: Number(price),
         stock: Number(stock),
-        productType,
-        image: imageURL,
+        image: imageURL, // just use provided URL
+        productType: "item",
         createdAt: serverTimestamp(),
       });
 
@@ -58,10 +34,9 @@ const AdminAddProduct: React.FC<AdminAddProductProps> = ({ onProductAdded }) => 
       setDescription("");
       setPrice("");
       setStock("");
-      setProductType("item");
-      setFile(null);
+      setImageURL("");
 
-      if (onProductAdded) onProductAdded(); // refresh parent
+      if (onProductAdded) onProductAdded();
     } catch (error) {
       console.error("Error adding product:", error);
       alert("❌ Failed to add product.");
@@ -95,9 +70,7 @@ const AdminAddProduct: React.FC<AdminAddProductProps> = ({ onProductAdded }) => 
           type="number"
           placeholder="Price"
           value={price}
-          onChange={(e) =>
-            setPrice(e.target.value === "" ? "" : Number(e.target.value))
-          }
+          onChange={(e) => setPrice(e.target.value === "" ? "" : Number(e.target.value))}
           className="w-full border p-2 rounded"
         />
 
@@ -105,31 +78,21 @@ const AdminAddProduct: React.FC<AdminAddProductProps> = ({ onProductAdded }) => 
           type="number"
           placeholder="Stock"
           value={stock}
-          onChange={(e) =>
-            setStock(e.target.value === "" ? "" : Number(e.target.value))
-          }
+          onChange={(e) => setStock(e.target.value === "" ? "" : Number(e.target.value))}
           className="w-full border p-2 rounded"
         />
-
-        <select
-          value={productType}
-          onChange={(e) => setProductType(e.target.value)}
-          className="w-full border p-2 rounded"
-        >
-          <option value="item">Item</option>
-          <option value="service">Service</option>
-        </select>
 
         <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
+          type="url"
+          placeholder="Image URL (optional)"
+          value={imageURL}
+          onChange={(e) => setImageURL(e.target.value)}
           className="w-full border p-2 rounded"
         />
 
-        {file && (
+        {imageURL && (
           <img
-            src={URL.createObjectURL(file)}
+            src={imageURL}
             alt="Preview"
             className="w-32 h-32 object-cover rounded-lg mb-2"
           />
@@ -140,7 +103,7 @@ const AdminAddProduct: React.FC<AdminAddProductProps> = ({ onProductAdded }) => 
           disabled={loading}
           className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
         >
-          {loading ? "Uploading..." : "Add Product"}
+          {loading ? "Saving..." : "Add Product"}
         </button>
       </form>
     </div>

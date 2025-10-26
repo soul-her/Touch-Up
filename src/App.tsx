@@ -1,19 +1,20 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from "react";
 import { CartProvider } from "./components/context/CartContext";
-import Header from './components/Header';
-import Footer from './components/Footer';
-import ProductList from './components/ProductList';
-import CartView from './components/CartView';
-import CheckoutView from './components/CheckoutView';
-import AboutView from './components/AboutView';
-import LoginView from './components/LoginView';
-import ProfileView from './components/ProfileView';
-import DriverDashboard from './components/dashboards/DriverDashboard';
-import StaffDashboard from './components/dashboards/StaffDashboard';
-import ManagerDashboard from './components/dashboards/ManagerDashboard';
-import ProtectedRoute from './components/ProtectedRoute';
+import Header from "./components/Header";
+import Footer from "./components/Footer";
+import ProductList from "./components/ProductList";
+import CartView from "./components/CartView";
+import CheckoutView from "./components/CheckoutView";
+import AboutView from "./components/AboutView";
+import LoginView from "./components/LoginView";
+import ProfileView from "./components/ProfileView";
+import DriverDashboard from "./components/dashboards/DriverDashboard";
+import StaffDashboard from "./components/dashboards/StaffDashboard";
+import ManagerDashboard from "./components/dashboards/ManagerDashboard";
+import ProtectedRoute from "./components/ProtectedRoute";
+import WaterSplashBackground from "./components/WaterSplashBackground";
 
-import { auth, db } from './firebase';
+import { auth, db } from "./firebase";
 import {
   collection,
   getDocs,
@@ -26,11 +27,11 @@ import {
   orderBy,
   onSnapshot,
   serverTimestamp,
-} from 'firebase/firestore';
-import type { View, Notification, DBUser, ShippingAddress, Product } from './types';
+} from "firebase/firestore";
+import type { View, Notification, DBUser, ShippingAddress, Product } from "./types";
 
 const App: React.FC = () => {
-  const [view, setView] = useState<View>('products');
+  const [view, setView] = useState<View>("products");
   const [currentUser, setCurrentUser] = useState<DBUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [postLoginAction, setPostLoginAction] = useState<View | null>(null);
@@ -42,7 +43,7 @@ const App: React.FC = () => {
   const fetchProducts = useCallback(async () => {
     setIsProductsLoading(true);
     try {
-      const snapshot = await getDocs(collection(db, 'products'));
+      const snapshot = await getDocs(collection(db, "products"));
       const productsData = snapshot.docs.map(
         (docSnap) =>
           ({
@@ -52,7 +53,7 @@ const App: React.FC = () => {
       );
       setProducts(productsData);
     } catch (error) {
-      console.error('Error fetching products:', error);
+      console.error("Error fetching products:", error);
     } finally {
       setIsProductsLoading(false);
     }
@@ -67,14 +68,14 @@ const App: React.FC = () => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       setIsAuthLoading(true);
       if (user) {
-        const userDocRef = doc(db, 'users', user.uid);
+        const userDocRef = doc(db, "users", user.uid);
         const userDoc = await getDoc(userDocRef);
 
         const dbUser: DBUser = {
           uid: user.uid,
-          displayName: user.displayName ?? 'Unknown',
-          email: user.email ?? '',
-          role: 'customer',
+          displayName: user.displayName ?? "Unknown",
+          email: user.email ?? "",
+          role: "customer",
         };
 
         if (userDoc.exists()) {
@@ -88,15 +89,15 @@ const App: React.FC = () => {
           setPostLoginAction(null);
         } else {
           const role = dbUser.role;
-          if (role === 'manager' || role === 'staff' || role === 'driver') {
+          if (role === "manager" || role === "staff" || role === "driver") {
             setView(role);
           } else {
-            setView('products');
+            setView("products");
           }
         }
       } else {
         setCurrentUser(null);
-        setView('products');
+        setView("products");
       }
       setIsAuthLoading(false);
     });
@@ -112,9 +113,9 @@ const App: React.FC = () => {
     }
 
     const q = query(
-      collection(db, 'notifications'),
-      where('userId', '==', currentUser.uid),
-      orderBy('createdAt', 'desc')
+      collection(db, "notifications"),
+      where("userId", "==", currentUser.uid),
+      orderBy("createdAt", "desc")
     );
 
     const unsubscribe = onSnapshot(
@@ -130,7 +131,7 @@ const App: React.FC = () => {
         setNotifications(userNotifications);
       },
       (error) => {
-        console.error('Error fetching notifications:', error);
+        console.error("Error fetching notifications:", error);
       }
     );
 
@@ -144,51 +145,51 @@ const App: React.FC = () => {
     address: ShippingAddress;
   }) => {
     if (!currentUser) {
-      alert('You must be logged in to schedule a pickup.');
-      setView('login');
+      alert("You must be logged in to schedule a pickup.");
+      setView("login");
       return;
     }
 
     try {
-      await addDoc(collection(db, 'pickups'), {
+      await addDoc(collection(db, "pickups"), {
         userId: currentUser.uid,
-        customerName: currentUser.displayName || 'N/A',
+        customerName: currentUser.displayName || "N/A",
         date: details.date,
         time: details.time,
         address: details.address,
-        status: 'Pending',
+        status: "Pending",
         createdAt: serverTimestamp(),
       });
 
       await setDoc(
-        doc(db, 'users', currentUser.uid),
+        doc(db, "users", currentUser.uid),
         { shippingAddress: details.address },
         { merge: true }
       );
 
-      await addDoc(collection(db, 'notifications'), {
+      await addDoc(collection(db, "notifications"), {
         userId: currentUser.uid,
-        message: 'Pickup Scheduled',
+        message: "Pickup Scheduled",
         details: `For ${details.date} at ${details.time} to ${details.address.address}`,
-        status: 'Pending',
+        status: "Pending",
         createdAt: serverTimestamp(),
       });
 
-      alert('Pickup scheduled successfully!');
+      alert("Pickup scheduled successfully!");
     } catch (error) {
-      console.error('Error scheduling pickup: ', error);
-      alert('Failed to schedule pickup. Please try again.');
+      console.error("Error scheduling pickup: ", error);
+      alert("Failed to schedule pickup. Please try again.");
     }
   };
 
   const getDashboardTitle = (view: View): string | null => {
     switch (view) {
-      case 'driver':
-        return 'My Deliveries';
-      case 'staff':
-        return 'Order Fulfillment';
-      case 'manager':
-        return 'Manager Dashboard';
+      case "driver":
+        return "My Deliveries";
+      case "staff":
+        return "Order Fulfillment";
+      case "manager":
+        return "Manager Dashboard";
       default:
         return null;
     }
@@ -198,40 +199,40 @@ const App: React.FC = () => {
   const renderView = () => {
     const userRole = currentUser?.role ?? null;
     switch (view) {
-      case 'cart':
+      case "cart":
         return <CartView setView={setView} />;
-      case 'checkout':
+      case "checkout":
         return currentUser ? (
           <CheckoutView setView={setView} currentUser={currentUser} />
         ) : (
           <LoginView setView={setView} postLoginAction="checkout" />
         );
-      case 'about':
+      case "about":
         return <AboutView />;
-      case 'login':
+      case "login":
         return <LoginView setView={setView} postLoginAction={postLoginAction} />;
-      case 'profile':
+      case "profile":
         return currentUser ? (
           <ProfileView currentUser={currentUser} />
         ) : (
           <LoginView setView={setView} postLoginAction="profile" />
         );
-      case 'driver':
+      case "driver":
         return (
-          <ProtectedRoute allowedRoles={['driver', 'manager']} userRole={userRole}>
+          <ProtectedRoute allowedRoles={["driver", "manager"]} userRole={userRole}>
             {currentUser && <DriverDashboard currentUser={currentUser} />}
           </ProtectedRoute>
         );
-      case 'staff':
+      case "staff":
         return (
-          <ProtectedRoute allowedRoles={['staff', 'manager']} userRole={userRole}>
+          <ProtectedRoute allowedRoles={["staff", "manager"]} userRole={userRole}>
             <StaffDashboard />
           </ProtectedRoute>
         );
-      case 'manager':
+      case "manager":
         return (
-          <ProtectedRoute allowedRoles={['manager']} userRole={userRole}>
-            <ManagerDashboard products={products} refetchProducts={fetchProducts} />
+          <ProtectedRoute allowedRoles={["manager"]} userRole={userRole}>
+            <ManagerDashboard currentUser={currentUser} />
           </ProtectedRoute>
         );
       default:
@@ -257,20 +258,32 @@ const App: React.FC = () => {
 
   return (
     <CartProvider>
-      <div className="flex flex-col min-h-screen bg-gray-50 font-sans">
-        <Header
-          setView={setView}
-          currentUser={currentUser}
-          userRole={userRole}
-          notifications={notifications}
-        />
-        <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {dashboardTitle && (
-            <h1 className="text-3xl font-bold text-gray-800 mb-6">{dashboardTitle}</h1>
+      {/* ✅ Water Splash Animated Background */}
+      <div className="relative min-h-screen overflow-hidden">
+        <WaterSplashBackground />
+
+        {/* ✅ Foreground Content */}
+        <div className="relative z-10 flex flex-col min-h-screen font-sans">
+          {/* ✅ Hide Header on dashboards */}
+          {view !== "manager" && view !== "driver" && view !== "staff" && (
+            <Header
+              setView={setView}
+              currentUser={currentUser}
+              userRole={userRole}
+              notifications={notifications}
+            />
           )}
-          {renderView()}
-        </main>
-        <Footer />
+
+          <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {dashboardTitle && (
+              <h1 className="text-3xl font-bold text-gray-800 mb-6">{dashboardTitle}</h1>
+            )}
+            {renderView()}
+          </main>
+
+          {/* ✅ Hide Footer on dashboards */}
+          {view !== "manager" && view !== "driver" && view !== "staff" && <Footer />}
+        </div>
       </div>
     </CartProvider>
   );
