@@ -8,117 +8,214 @@ import {
   Timestamp,
   query,
   orderBy,
+  where,
 } from "firebase/firestore";
 import type { User } from "../../types";
 
 interface Pickup {
   id: string;
-  fullName: string;
-  address: {
-    address: string;
-    city: string;
-    zip: string;
+  fullName?: string;
+  customerName?: string;
+  address?: {
+    fullName?: string;
+    address?: string;
+    city?: string;
+    zip?: string;
   };
   status: string;
-  date: string;
-  time: string;
-  userId: string;
-  createdAt: any;
-  customerName?: string;
+  date?: string;
+  time?: string;
+  userId?: string;
+  driverId?: string;
+  createdAt?: any;
+  completedAt?: any;
 }
 
 interface Props {
   currentUser: User;
 }
 
+const statusPill = (status?: string) => {
+  const s = (status || "").toLowerCase();
+
+  if (s === "picked up") {
+    return "bg-green-500/20 text-green-300 border border-green-500/20";
+  }
+  if (s === "on the way") {
+    return "bg-blue-500/20 text-blue-300 border border-blue-500/20";
+  }
+  if (s === "assigned") {
+    return "bg-yellow-500/20 text-yellow-300 border border-yellow-500/20";
+  }
+  return "bg-white/10 text-white/80 border border-white/10";
+};
+
 const DriverPickups: React.FC<Props> = ({ currentUser }) => {
   const [pickups, setPickups] = useState<Pickup[]>([]);
+  const [error, setError] = useState("");
+  const [savingId, setSavingId] = useState("");
 
   useEffect(() => {
-    const q = query(collection(db, "pickups"), orderBy("createdAt", "desc"));
+    if (!currentUser?.uid) return;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Pickup));
-      setPickups(data);
-    });
+    const q = query(
+      collection(db, "pickups"),
+      where("driverId", "==", currentUser.uid),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const data = snapshot.docs.map(
+          (d) => ({ id: d.id, ...(d.data() as any) } as Pickup)
+        );
+        setPickups(data);
+      },
+      (err) => {
+        console.error(err);
+        setError(err?.message || "Failed to load pickups.");
+      }
+    );
 
     return () => unsubscribe();
-  }, []);
+  }, [currentUser?.uid]);
 
   const handleStatusUpdate = async (pickupId: string, newStatus: string) => {
-    const ref = doc(db, "pickups", pickupId);
-    const completedAt = newStatus === "Picked Up" ? Timestamp.fromDate(new Date()) : null;
-    await updateDoc(ref, { status: newStatus, completedAt }, { merge: true });
+    try {
+      setError("");
+      setSavingId(pickupId);
+
+      const ref = doc(db, "pickups", pickupId);
+
+      const patch: any = { status: newStatus };
+      if (newStatus === "Picked Up") {
+        patch.completedAt = Timestamp.fromDate(new Date());
+      }
+
+      await updateDoc(ref, patch);
+    } catch (err: any) {
+      console.error("Update pickup status failed:", err);
+      setError(err?.message || "Failed to update pickup status.");
+    } finally {
+      setSavingId("");
+    }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="text-white space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+          My Pickups
+        </h2>
+
+        <span className="text-xs md:text-sm px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/70">
+          {pickups.length} total
+        </span>
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-200">
+          {error}
+        </div>
+      )}
+
       {pickups.length === 0 ? (
-        <p className="text-gray-500">No scheduled pickups yet.</p>
+        <p className="text-white/70">No assigned pickups yet.</p>
       ) : (
-        pickups.map((pickup) => (
-          <div key={pickup.id} className="p-4 border rounded-lg bg-gray-50 shadow-sm">
-            {/* Header */}
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="font-bold text-lg text-gray-800">
-                {pickup.fullName || pickup.customerName || "Unnamed Customer"}
-              </h3>
-              <span
-                className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                  pickup.status === "Picked Up"
-                    ? "bg-green-100 text-green-800"
-                    : pickup.status === "On the Way"
-                    ? "bg-blue-100 text-blue-800"
-                    : "bg-yellow-100 text-yellow-800"
-                }`}
+        <div className="space-y-6">
+          {pickups.map((pickup) => {
+            const name =
+              pickup.address?.fullName ||
+              pickup.fullName ||
+              pickup.customerName ||
+              "Unnamed Customer";
+
+            const isBusy = savingId === pickup.id;
+
+            return (
+              <div
+                key={pickup.id}
+                className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.9)]"
               >
-                {pickup.status}
-              </span>
-            </div>
+                {/* Header */}
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-white/50">Pickup</p>
+                    <p className="text-lg font-semibold text-white">
+                      {name}
+                    </p>
+                  </div>
 
-            {/* Address & Details */}
-            <div className="text-gray-700 mb-2">
-              <p>
-                <strong>Address:</strong>{" "}
-                {pickup.address?.address}, {pickup.address?.city} {pickup.address?.zip}
-              </p>
-              <p>
-                <strong>Date:</strong> {pickup.date}
-              </p>
-              <p>
-                <strong>Time:</strong> {pickup.time}
-              </p>
-            </div>
+                  <span
+                    className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${statusPill(
+                      pickup.status
+                    )}`}
+                  >
+                    {pickup.status || "Pending"}
+                  </span>
+                </div>
 
-            {/* Actions */}
-            <div className="flex gap-2 mt-3 justify-end">
-              {pickup.status === "Pending" && (
-                <button
-                  onClick={() => handleStatusUpdate(pickup.id, "On the Way")}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Mark as On the Way
-                </button>
-              )}
+                {/* Details */}
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-white/80">
+                  <p className="md:col-span-2">
+                    <span className="font-semibold text-white">Address:</span>{" "}
+                    {pickup.address?.address || "—"},{" "}
+                    {pickup.address?.city || "—"}{" "}
+                    {pickup.address?.zip || ""}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-white">Date:</span>{" "}
+                    {pickup.date || "—"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-white">Time:</span>{" "}
+                    {pickup.time || "—"}
+                  </p>
+                </div>
 
-              {pickup.status === "On the Way" && (
-                <button
-                  onClick={() => handleStatusUpdate(pickup.id, "Picked Up")}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                >
-                  Mark as Picked Up
-                </button>
-              )}
-            </div>
+                {/* Actions */}
+                <div className="mt-5 flex flex-wrap gap-2 justify-end">
+                  {(pickup.status === "Pending" ||
+                    pickup.status === "Assigned") && (
+                    <button
+                      disabled={isBusy}
+                      onClick={() =>
+                        handleStatusUpdate(pickup.id, "On the Way")
+                      }
+                      className="px-4 py-2 rounded-xl font-semibold bg-blue-500/80 hover:bg-blue-500 text-white transition shadow disabled:opacity-60"
+                    >
+                      {isBusy ? "Saving…" : "Mark as On the Way"}
+                    </button>
+                  )}
 
-            {/* Completion timestamp */}
-            {pickup.status === "Picked Up" && pickup.createdAt?.toDate && (
-              <p className="text-xs text-gray-500 mt-2 text-right">
-                Picked up on {pickup.createdAt.toDate().toLocaleString("en-PH")}
-              </p>
-            )}
-          </div>
-        ))
+                  {pickup.status === "On the Way" && (
+                    <button
+                      disabled={isBusy}
+                      onClick={() =>
+                        handleStatusUpdate(pickup.id, "Picked Up")
+                      }
+                      className="px-4 py-2 rounded-xl font-semibold bg-green-500/80 hover:bg-green-500 text-white transition shadow disabled:opacity-60"
+                    >
+                      {isBusy ? "Saving…" : "Mark as Picked Up"}
+                    </button>
+                  )}
+                </div>
+
+                {/* Completion time */}
+                {pickup.status === "Picked Up" &&
+                  pickup.completedAt?.toDate && (
+                    <p className="text-xs text-white/50 mt-3 text-right">
+                      Picked up on{" "}
+                      {pickup.completedAt
+                        .toDate()
+                        .toLocaleString("en-PH")}
+                    </p>
+                  )}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

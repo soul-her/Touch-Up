@@ -1,119 +1,219 @@
-import React, { useState, useEffect } from "react";
-import { db, auth } from "../../firebase";
-import { collection, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
+import { auth } from "../../firebase";
 import { signOut } from "firebase/auth";
+
 import DriverOrders from "./DriverOrders";
 import DriverPickups from "./DriverPickups";
+import DriverContainers from "./DriverContainers";
+
 import type { User } from "../../types";
-import { Menu, X } from "lucide-react"; // For icons
+import { Menu, X, Package, Truck, RefreshCcw, LogOut } from "lucide-react";
 
 const DriverDashboard: React.FC<{ currentUser: User }> = ({ currentUser }) => {
-  const [view, setView] = useState<"orders" | "pickups">("orders");
+  const [view, setView] = useState<"orders" | "pickups" | "containers">("orders");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // ✅ Automatically assign pickups to the current driver (if unassigned)
-  useEffect(() => {
-    const autoAssignPickups = async () => {
-      if (!currentUser?.uid) return;
-
-      try {
-        const pickupsRef = collection(db, "pickups");
-        const q = query(pickupsRef, where("driverId", "==", null));
-        const snapshot = await getDocs(q);
-
-        const batchUpdates = snapshot.docs.map(async (pickupDoc) => {
-          const pickupRef = doc(db, "pickups", pickupDoc.id);
-          await updateDoc(pickupRef, { driverId: currentUser.uid });
-        });
-
-        await Promise.all(batchUpdates);
-      } catch (err) {
-        console.error("Auto-assign error:", err);
-      }
-    };
-
-    autoAssignPickups();
-  }, [currentUser?.uid]);
 
   const handleLogout = async () => {
     await signOut(auth);
   };
 
-  return (
-    <div className="flex min-h-screen bg-gray-100 relative">
-      {/* ========== Sidebar ========== */}
-      <aside
-        className={`fixed z-30 md:static md:translate-x-0 top-0 left-0 h-full w-64 bg-gray-800 text-white flex flex-col transform transition-transform duration-300 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-        }`}
+  // Close sidebar on ESC (mobile)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSidebarOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const NavButton = ({
+    id,
+    label,
+    icon,
+  }: {
+    id: "orders" | "pickups" | "containers";
+    label: string;
+    icon: React.ReactNode;
+  }) => {
+    const active = view === id;
+    return (
+      <button
+        onClick={() => {
+          setView(id);
+          setSidebarOpen(false);
+        }}
+        className={[
+          "group w-full flex items-center gap-3 px-4 py-3 rounded-xl transition",
+          "focus:outline-none focus:ring-2 focus:ring-blue-400/40",
+          active
+            ? "bg-white/10 text-white shadow-[0_10px_30px_-15px_rgba(0,0,0,0.6)]"
+            : "text-white/80 hover:bg-white/10 hover:text-white",
+        ].join(" ")}
       >
-        <div className="flex justify-between items-center p-4 border-b border-gray-700">
-          <h2 className="text-2xl font-bold">Driver Panel</h2>
-          <button
-            className="md:hidden text-gray-300 hover:text-white"
-            onClick={() => setSidebarOpen(false)}
-          >
-            <X size={24} />
-          </button>
-        </div>
+        <span
+          className={[
+            "h-9 w-9 rounded-lg grid place-items-center transition",
+            active ? "bg-blue-500/25" : "bg-white/5 group-hover:bg-white/10",
+          ].join(" ")}
+        >
+          {icon}
+        </span>
+        <span className="font-semibold">{label}</span>
 
-        <nav className="flex-1 p-4 space-y-3">
-          <button
-            onClick={() => {
-              setView("orders");
-              setSidebarOpen(false);
-            }}
-            className={`w-full text-left px-4 py-2 rounded-lg transition ${
-              view === "orders" ? "bg-blue-600" : "hover:bg-gray-700"
-            }`}
-          >
-            Orders
-          </button>
-          <button
-            onClick={() => {
-              setView("pickups");
-              setSidebarOpen(false);
-            }}
-            className={`w-full text-left px-4 py-2 rounded-lg transition ${
-              view === "pickups" ? "bg-blue-600" : "hover:bg-gray-700"
-            }`}
-          >
-            Pickups
-          </button>
-        </nav>
+        {/* Active indicator */}
+        <span
+          className={[
+            "ml-auto h-2 w-2 rounded-full transition",
+            active ? "bg-blue-400" : "bg-transparent",
+          ].join(" ")}
+        />
+      </button>
+    );
+  };
 
-        <div className="p-4 border-t border-gray-700">
-          <button
-            onClick={handleLogout}
-            className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg"
-          >
-            Log out
-          </button>
-        </div>
-      </aside>
+  return (
+    <div className="min-h-screen relative">
+      {/* Background */}
+      <div className="fixed inset-0 -z-10">
+        {/* gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800" />
+        {/* subtle pattern */}
+        <div
+          className="absolute inset-0 opacity-[0.07]"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.6) 1px, transparent 0)",
+            backgroundSize: "18px 18px",
+          }}
+        />
+        {/* soft glow blobs */}
+        <div className="absolute -top-24 -left-24 h-80 w-80 rounded-full bg-blue-500/20 blur-3xl" />
+        <div className="absolute -bottom-24 -right-24 h-80 w-80 rounded-full bg-indigo-500/20 blur-3xl" />
+      </div>
 
-      {/* ========== Main Content ========== */}
-      <main className="flex-1 p-6 md:ml-0">
-        {/* Top bar for mobile */}
-        <div className="flex items-center justify-between mb-6">
-          <button
-            className="md:hidden text-gray-800"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu size={28} />
-          </button>
-          <h1 className="text-3xl font-bold text-gray-800">
-            Welcome, {currentUser?.displayName || "Driver"}
-          </h1>
-        </div>
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-black/40 backdrop-blur-[1px] md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
-        {/* Render Selected View */}
-        {view === "orders" ? (
-          <DriverOrders currentUser={currentUser} />
-        ) : (
-          <DriverPickups currentUser={currentUser} />
-        )}
-      </main>
+      <div className="flex min-h-screen">
+        {/* Sidebar */}
+        <aside
+          className={[
+            "fixed z-30 md:static top-0 left-0 h-full w-72",
+            "transform transition-transform duration-300",
+            sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+          ].join(" ")}
+        >
+          <div className="h-full p-4">
+            <div className="h-full rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-[0_30px_80px_-40px_rgba(0,0,0,0.9)] flex flex-col overflow-hidden">
+              {/* Brand */}
+              <div className="p-5 border-b border-white/10 flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-white/60">Touch Up</p>
+                  <h2 className="text-xl font-extrabold tracking-tight text-white">
+                    Driver Panel
+                  </h2>
+                </div>
+                <button
+                  className="md:hidden text-white/70 hover:text-white transition"
+                  onClick={() => setSidebarOpen(false)}
+                  aria-label="Close sidebar"
+                >
+                  <X size={22} />
+                </button>
+              </div>
+
+              {/* Nav */}
+              <nav className="p-4 space-y-2">
+                <NavButton
+                  id="orders"
+                  label="Orders"
+                  icon={<Package size={18} />}
+                />
+                <NavButton
+                  id="pickups"
+                  label="Pickups"
+                  icon={<Truck size={18} />}
+                />
+                <NavButton
+                  id="containers"
+                  label="Containers"
+                  icon={<RefreshCcw size={18} />}
+                />
+              </nav>
+
+              {/* Footer */}
+              <div className="mt-auto p-4 border-t border-white/10">
+                <button
+                  onClick={handleLogout}
+                  className={[
+                    "w-full flex items-center justify-center gap-2",
+                    "bg-red-500/90 hover:bg-red-500 text-white",
+                    "py-2.5 rounded-xl font-semibold transition",
+                    "shadow-[0_12px_25px_-18px_rgba(0,0,0,0.9)]",
+                    "focus:outline-none focus:ring-2 focus:ring-red-300/40",
+                  ].join(" ")}
+                >
+                  <LogOut size={18} />
+                  Log out
+                </button>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main */}
+        <main className="flex-1 p-4 md:p-6 md:ml-0">
+          {/* Top bar */}
+          <div className="sticky top-0 z-10 mb-6">
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-[0_25px_70px_-45px_rgba(0,0,0,0.9)] px-4 py-4 md:px-6 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button
+                  className="md:hidden text-white/90 hover:text-white transition p-2 rounded-xl bg-white/5 border border-white/10"
+                  onClick={() => setSidebarOpen(true)}
+                  aria-label="Open sidebar"
+                >
+                  <Menu size={22} />
+                </button>
+
+                <div>
+                  <h1 className="text-xl md:text-2xl font-extrabold text-white tracking-tight">
+                    Welcome, {currentUser?.displayName || "Driver"}
+                  </h1>
+                  <p className="text-xs md:text-sm text-white/60">
+                    Manage deliveries, pickups, and container returns
+                  </p>
+                </div>
+              </div>
+
+              <div className="hidden md:flex items-center gap-2">
+                <span className="px-3 py-1.5 rounded-full text-xs font-semibold bg-white/5 border border-white/10 text-white/80">
+                  {view === "orders"
+                    ? "Orders"
+                    : view === "pickups"
+                    ? "Pickups"
+                    : "Containers"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Content card */}
+          <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-[0_30px_90px_-55px_rgba(0,0,0,0.95)] p-4 md:p-6">
+            {view === "orders" ? (
+              <DriverOrders currentUser={currentUser} />
+            ) : view === "pickups" ? (
+              <DriverPickups currentUser={currentUser} />
+            ) : (
+              <DriverContainers currentUser={currentUser} />
+            )}
+          </div>
+        </main>
+      </div>
     </div>
   );
 };

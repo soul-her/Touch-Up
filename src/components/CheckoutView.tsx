@@ -9,7 +9,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { useCart } from "./context/CartContext";
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -18,7 +18,6 @@ interface CheckoutViewProps {
   setView?: (view: string) => void;
 }
 
-// Fix default icon issue in Leaflet
 delete (L.Icon.Default as any).prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
@@ -34,8 +33,9 @@ const CheckoutView: React.FC<CheckoutViewProps> = ({ currentUser, setView }) => 
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [isPlacing, setIsPlacing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState("");
 
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [street, setStreet] = useState("");
   const [barangay, setBarangay] = useState("");
   const [city, setCity] = useState("");
@@ -43,46 +43,55 @@ const CheckoutView: React.FC<CheckoutViewProps> = ({ currentUser, setView }) => 
   const [postalCode, setPostalCode] = useState("");
   const [savedAddress, setSavedAddress] = useState<any>(null);
 
-  const [lat, setLat] = useState(14.5995);
-  const [lng, setLng] = useState(120.9842);
+  // ⭐ DEFAULT DUMAGUETE LOCATION
+  const [lat, setLat] = useState(9.3079);
+  const [lng, setLng] = useState(123.3054);
+
   const [distanceKm, setDistanceKm] = useState(0);
   const [shippingCost, setShippingCost] = useState(0);
 
-  const storeLocation = { lat: 14.5995, lng: 120.9842 }; // Manila
+  // Store location in Dumaguete
+  const storeLocation = { lat: 9.3079, lng: 123.3081 };
 
-  // Fetch user info
+  // Load existing user info
   useEffect(() => {
-    const fetchUserInfo = async () => {
+    const loadUser = async () => {
       if (!currentUser) return;
+
       try {
         const userRef = doc(db, "users", currentUser.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          setName(userData.name || "");
-          if (userData.address) {
-            const addr = userData.address;
-            setSavedAddress(addr);
-            setStreet(addr.street || "");
-            setBarangay(addr.barangay || "");
-            setCity(addr.city || "");
-            setProvince(addr.province || "");
-            setPostalCode(addr.postalCode || "");
-            if (addr.lat && addr.lng) {
-              setLat(addr.lat);
-              setLng(addr.lng);
-              calculateDistance(addr.lat, addr.lng);
+        const snap = await getDoc(userRef);
+
+        if (snap.exists()) {
+          const u = snap.data();
+          setName(u.name || "");
+          setPhone(u.phone || "");
+
+          if (u.address) {
+            const a = u.address;
+            setSavedAddress(a);
+            setStreet(a.street || "");
+            setBarangay(a.barangay || "");
+            setCity(a.city || "");
+            setProvince(a.province || "");
+            setPostalCode(a.postalCode || "");
+
+            if (a.lat && a.lng) {
+              setLat(a.lat);
+              setLng(a.lng);
+              calculateDistance(a.lat, a.lng);
             }
           }
         }
-      } catch (err) {
-        console.error("Error loading user info:", err);
+      } catch {
+        console.log("Error loading user");
       }
     };
-    fetchUserInfo();
+
+    loadUser();
   }, [currentUser]);
 
-  // 📍 Handle map click to set location
+  // Map click handler
   const LocationPicker = () => {
     useMapEvents({
       click(e) {
@@ -94,233 +103,204 @@ const CheckoutView: React.FC<CheckoutViewProps> = ({ currentUser, setView }) => 
     return <Marker position={[lat, lng]} />;
   };
 
-  // 🧮 Calculate distance using Haversine formula
+  // Distance (Haversine formula)
   const calculateDistance = (lat2: number, lng2: number) => {
-    const R = 6371; // km
+    const R = 6371;
     const dLat = ((lat2 - storeLocation.lat) * Math.PI) / 180;
     const dLng = ((lng2 - storeLocation.lng) * Math.PI) / 180;
+
     const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((storeLocation.lat * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLng / 2) *
-        Math.sin(dLng / 2);
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(storeLocation.lat * (Math.PI / 180)) *
+        Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLng / 2) ** 2;
+
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
     const distance = R * c;
     setDistanceKm(distance);
     setShippingCost(Math.round(distance * 12));
   };
 
-  // 💾 Place order
+  // PH number validation
+  const isValidPhone = (num: string) => /^09\d{9}$/.test(num);
+
+  // Place order
   const handlePlaceOrder = async () => {
     try {
       if (!currentUser) throw new Error("No user logged in");
       if (!cartItems.length) throw new Error("Cart is empty");
+
       if (!name || !street || !city || !province)
         throw new Error("Please complete your address");
+
+      if (!isValidPhone(phone))
+        throw new Error("Invalid phone format. Must be 11 digits and start with 09");
 
       setIsPlacing(true);
       setError(null);
 
-      const fullAddress = { street, barangay, city, province, postalCode, lat, lng };
+      const fullAddress = {
+        street,
+        barangay,
+        city,
+        province,
+        postalCode,
+        lat,
+        lng,
+      };
 
-      const userRef = doc(db, "users", currentUser.uid);
       await setDoc(
-        userRef,
-        { name, address: fullAddress, email: currentUser.email },
+        doc(db, "users", currentUser.uid),
+        { name, phone, address: fullAddress },
         { merge: true }
       );
 
       const totalItems = cartItems.reduce(
-        (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+        (sum, item) =>
+          sum +
+          (Number(item.price) || 0) * (Number(item.quantity) || 1),
         0
       );
 
+      const now = new Date();
+      const orderDate = now.toLocaleDateString();
+      const orderTime = now.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
       const orderData = {
         userId: currentUser.uid,
-        name,
+        customerName: name,
+        phone,
         address: fullAddress,
-        email: currentUser.email,
         items: cartItems,
         total: totalItems + shippingCost,
         shippingCost,
         distanceKm,
         status: "Placed",
+        date: orderDate,
+        time: orderTime,
         createdAt: serverTimestamp(),
       };
 
       await addDoc(collection(db, "orders"), orderData);
+
       clearCart();
       setOrderPlaced(true);
-    } catch (error: any) {
-      console.error("❌ Error placing order:", error);
-      setError(error.message || "Failed to place order. Please try again.");
+    } catch (err: any) {
+      setError(err.message);
     } finally {
       setIsPlacing(false);
     }
   };
 
   const totalPrice = cartItems.reduce(
-    (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+    (sum, item) =>
+      sum +
+      (Number(item.price) || 0) * (Number(item.quantity) || 1),
     0
   );
 
   if (orderPlaced) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-green-50 px-6">
-        <div className="bg-white shadow-lg rounded-2xl p-10 max-w-md text-center border border-green-100">
-          <h1 className="text-3xl font-bold text-green-600 mb-4">
-            ✅ Order Placed Successfully!
-          </h1>
-          <p className="text-gray-600 mb-8">
-            Thank you for your purchase! We’ll process your order shortly.
-          </p>
-          <button
-            onClick={() => (setView ? setView("products") : window.location.reload())}
-            className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition"
-          >
-            Go Back to Home
-          </button>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <h1 className="text-3xl font-bold text-green-600">
+          Order Placed Successfully!
+        </h1>
+        <button
+          onClick={() =>
+            setView ? setView("products") : window.location.reload()
+          }
+          className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg"
+        >
+          Go Back
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-blue-50 to-white px-4 py-12">
-      <div className="w-full max-w-2xl bg-white shadow-xl rounded-2xl p-8 border border-gray-200">
-        <h2 className="text-3xl font-bold text-center text-gray-800 mb-8">Checkout</h2>
+    <div className="p-8 max-w-2xl mx-auto">
+      <h2 className="text-2xl font-bold mb-4">Checkout</h2>
 
-        {savedAddress && (
-          <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg mb-4">
-            <h3 className="font-semibold text-blue-700 mb-2">Saved Address:</h3>
-            <p className="text-gray-700">
-              {savedAddress.street}, {savedAddress.barangay}, {savedAddress.city},{" "}
-              {savedAddress.province}, {savedAddress.postalCode}
-            </p>
-          </div>
-        )}
+      {error && <p className="text-red-600 mb-2">{error}</p>}
 
-        <div className="mb-6">
-          <label className="block font-medium text-gray-700 mb-1">Full Name</label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Enter your full name"
-            className="w-full border rounded-lg p-2 mb-4"
-          />
+      <div className="mb-6">
+        <label>Full Name</label>
+        <input
+          className="w-full border p-2 rounded"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
 
-          <label className="block font-medium text-gray-700 mb-1">Street</label>
-          <input
-            type="text"
-            value={street}
-            onChange={(e) => setStreet(e.target.value)}
-            placeholder="Street, Building No."
-            className="w-full border rounded-lg p-2 mb-3"
-          />
+        <label className="mt-4 block">Phone Number</label>
+        <input
+          className="w-full border p-2 rounded"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="09xxxxxxxxx"
+          maxLength={11}
+        />
 
-          <label className="block font-medium text-gray-700 mb-1">Barangay</label>
-          <input
-            type="text"
-            value={barangay}
-            onChange={(e) => setBarangay(e.target.value)}
-            placeholder="Barangay"
-            className="w-full border rounded-lg p-2 mb-3"
-          />
+        <label className="mt-4 block">Street</label>
+        <input
+          className="w-full border p-2 rounded"
+          value={street}
+          onChange={(e) => setStreet(e.target.value)}
+        />
 
-          <label className="block font-medium text-gray-700 mb-1">City / Municipality</label>
-          <input
-            type="text"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            placeholder="City or Municipality"
-            className="w-full border rounded-lg p-2 mb-3"
-          />
+        <label className="mt-4 block">Barangay</label>
+        <input
+          className="w-full border p-2 rounded"
+          value={barangay}
+          onChange={(e) => setBarangay(e.target.value)}
+        />
 
-          <label className="block font-medium text-gray-700 mb-1">Province</label>
-          <input
-            type="text"
-            value={province}
-            onChange={(e) => setProvince(e.target.value)}
-            placeholder="Province"
-            className="w-full border rounded-lg p-2 mb-3"
-          />
+        <label className="mt-4 block">City</label>
+        <input
+          className="w-full border p-2 rounded"
+          value={city}
+          onChange={(e) => setCity(e.target.value)}
+        />
 
-          <label className="block font-medium text-gray-700 mb-1">Postal Code</label>
-          <input
-            type="text"
-            value={postalCode}
-            onChange={(e) => setPostalCode(e.target.value)}
-            placeholder="Postal Code"
-            className="w-full border rounded-lg p-2"
-          />
-        </div>
+        <label className="mt-4 block">Province</label>
+        <input
+          className="w-full border p-2 rounded"
+          value={province}
+          onChange={(e) => setProvince(e.target.value)}
+        />
 
-        {/* 🗺️ Leaflet Map Picker */}
-        <div className="mb-6">
-          <h3 className="font-semibold text-gray-700 mb-2">
-            Select your delivery location on the map:
-          </h3>
-          <MapContainer
-            center={[lat, lng]}
-            zoom={13}
-            style={{ height: "300px", width: "100%", borderRadius: "10px" }}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <LocationPicker />
-          </MapContainer>
-
-          {distanceKm > 0 && (
-            <p className="text-sm text-gray-600 mt-2">
-              📍 Distance: {distanceKm.toFixed(2)} km — Shipping: ₱{shippingCost}
-            </p>
-          )}
-        </div>
-
-        {/* 🛒 Cart Summary */}
-        <div className="divide-y divide-gray-200 mb-6">
-          {cartItems.map((item) => (
-            <div key={item.id} className="flex justify-between items-center py-3">
-              <div>
-                <p className="font-semibold text-gray-800">{item.name}</p>
-                <p className="text-sm text-gray-500">
-                  ₱{item.price} × {item.quantity}
-                </p>
-              </div>
-              <p className="font-medium text-gray-700">
-                ₱{(item.price * item.quantity).toFixed(2)}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex justify-between items-center border-t pt-4">
-          <p className="text-xl font-semibold text-gray-800">Total</p>
-          <p className="text-2xl font-bold text-blue-600">
-            ₱{(totalPrice + shippingCost).toFixed(2)}
-          </p>
-        </div>
-
-        {error && (
-          <p className="text-sm text-red-600 bg-red-100 p-3 rounded-md mt-4">{error}</p>
-        )}
-
-        <button
-          onClick={handlePlaceOrder}
-          disabled={isPlacing}
-          className={`mt-8 w-full py-3 text-lg font-semibold rounded-xl shadow-md transition ${
-            isPlacing
-              ? "bg-blue-300 text-white cursor-not-allowed"
-              : "bg-blue-600 hover:bg-blue-700 text-white"
-          }`}
-        >
-          {isPlacing ? "Processing..." : "Place Order"}
-        </button>
+        <label className="mt-4 block">Postal Code</label>
+        <input
+          className="w-full border p-2 rounded"
+          value={postalCode}
+          onChange={(e) => setPostalCode(e.target.value)}
+        />
       </div>
+
+      {/* ⭐ MAP DEFAULTS TO DUMAGUETE */}
+      <MapContainer
+        center={[lat, lng]}
+        zoom={13}
+        style={{ height: "300px", width: "100%" }}
+      >
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        <LocationPicker />
+      </MapContainer>
+
+      <p className="mt-2 text-gray-600">
+        Distance: {distanceKm.toFixed(2)} km — Shipping: ₱{shippingCost}
+      </p>
+
+      <button
+        onClick={handlePlaceOrder}
+        disabled={isPlacing}
+        className="w-full mt-6 bg-blue-600 text-white py-3 rounded-lg"
+      >
+        {isPlacing ? "Placing Order..." : "Place Order"}
+      </button>
     </div>
   );
 };

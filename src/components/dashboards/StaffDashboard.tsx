@@ -5,289 +5,187 @@ import {
   where,
   orderBy,
   onSnapshot,
-  doc,
-  updateDoc,
 } from "firebase/firestore";
-import { signOut } from "firebase/auth";
 import { db, auth } from "../../firebase";
+import { signOut } from "firebase/auth";
 import type { Order, DBUser } from "../../types";
+
+import OrdersTab from "../dashboards/StaffOrders";
+import PickupsTab from "../dashboards/StaffPickups";
+
+import { Menu, X, LogOut } from "lucide-react";
 
 const StaffDashboard: React.FC<{ setView: (view: string) => void }> = ({
   setView,
 }) => {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [pickups, setPickups] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<DBUser[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"orders" | "pickups">("orders");
 
-  // 🔹 Fetch orders and drivers in real-time
+  const [loadingOrders, setLoadingOrders] = useState(true);
+  const [loadingPickups, setLoadingPickups] = useState(true);
+  const [loadingDrivers, setLoadingDrivers] = useState(true);
+
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   useEffect(() => {
-    setIsLoading(true);
+    const ordersQuery = query(
+      collection(db, "orders"),
+      where("status", "in", [
+        "pending",
+        "Pending",
+        "Placed",
+        "Assigned",
+        "Out for Delivery",
+        "Delivered",
+        "completed",
+        "Completed",
+      ]),
+      orderBy("createdAt", "desc")
+    );
 
-    try {
-      // --- Orders Listener ---
-      const ordersRef = collection(db, "orders");
+    const unsubOrders = onSnapshot(
+      ordersQuery,
+      (snap) => {
+        setOrders(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
+        setLoadingOrders(false);
+      },
+      () => setLoadingOrders(false)
+    );
 
-      // 👇 include Delivered in query
-      const ordersQuery = query(
-        ordersRef,
-        where("status", "in", ["pending", "Placed", "Assigned", "Delivered"]),
-        orderBy("createdAt", "desc")
-      );
+    const driversQuery = query(collection(db, "users"), where("role", "==", "driver"));
+    const unsubDrivers = onSnapshot(
+      driversQuery,
+      (snap) => {
+        setDrivers(snap.docs.map((d) => ({ uid: d.id, ...(d.data() as any) })));
+        setLoadingDrivers(false);
+      },
+      () => setLoadingDrivers(false)
+    );
 
-      const unsubscribeOrders = onSnapshot(
-        ordersQuery,
-        (snapshot) => {
-          const ordersData = snapshot.docs.map(
-            (docSnap) =>
-              ({
-                id: docSnap.id,
-                ...docSnap.data(),
-              } as Order)
-          );
-          setOrders(ordersData);
-        },
-        (err) => {
-          console.error("🔥 Firestore query error (orders):", err);
-          setError("Failed to load orders.");
-        }
-      );
+    const pickupsQuery = query(collection(db, "pickups"), orderBy("createdAt", "desc"));
+    const unsubPickups = onSnapshot(
+      pickupsQuery,
+      (snap) => {
+        setPickups(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
+        setLoadingPickups(false);
+      },
+      () => setLoadingPickups(false)
+    );
 
-      // --- Drivers Listener ---
-      const usersRef = collection(db, "users");
-      const driversQuery = query(usersRef, where("role", "==", "driver"));
-
-      const unsubscribeDrivers = onSnapshot(
-        driversQuery,
-        (snapshot) => {
-          const driverData = snapshot.docs.map((docSnap) => {
-            const data = docSnap.data();
-            return {
-              id: docSnap.id,
-              uid: data.uid || docSnap.id,
-              displayName: data.displayName || data.name || "Unnamed Driver",
-              email: data.email || "",
-              role: data.role || "driver",
-              ...data,
-            } as DBUser;
-          });
-          setDrivers(driverData);
-          setIsLoading(false);
-        },
-        (err) => {
-          console.error("🔥 Firestore query error (drivers):", err);
-          setError("Failed to load drivers.");
-          setIsLoading(false);
-        }
-      );
-
-      return () => {
-        unsubscribeOrders();
-        unsubscribeDrivers();
-      };
-    } catch (err) {
-      console.error("❌ Unexpected error:", err);
-      setError("Unexpected error loading data.");
-      setIsLoading(false);
-    }
+    return () => {
+      unsubOrders();
+      unsubDrivers();
+      unsubPickups();
+    };
   }, []);
 
-  // 🔹 Assign driver
-  const handleAssignDriver = async (orderId: string, driver: DBUser) => {
-    if (!driver) return;
-    try {
-      const orderRef = doc(db, "orders", orderId);
-      await updateDoc(orderRef, {
-        driverId: driver.uid,
-        driverName: driver.displayName || "Unnamed Driver",
-        status: "Assigned",
-      });
-      console.log(`✅ Driver ${driver.displayName} assigned to order ${orderId}`);
-    } catch (err) {
-      console.error("Error assigning driver:", err);
-      alert("Failed to assign driver.");
-    }
-  };
+  const loading = loadingOrders || loadingDrivers || loadingPickups;
 
-  // 🔹 Logout
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      alert("✅ Logged out successfully!");
-      setView("home");
-    } catch (err) {
-      console.error("Logout error:", err);
-      alert("❌ Failed to log out.");
-    }
+    await signOut(auth);
+    setOrders([]);
+    setPickups([]);
+    setDrivers([]);
+    setView("home");
   };
 
-  // 🔹 Status color
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "pending":
-        return "bg-yellow-100 text-yellow-800";
-      case "Placed":
-        return "bg-blue-100 text-blue-800";
-      case "Assigned":
-        return "bg-indigo-100 text-indigo-800";
-      case "Delivered":
-        return "bg-green-100 text-green-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  // 🔹 Safely get name
-  const getCustomerName = (order: any): string => {
-    return (
-      order.customerName ||
-      order.name ||
-      order.customer?.fullName ||
-      order.userName ||
-      order.userEmail ||
-      "Unknown"
-    );
-  };
-
-  // 🔹 Safely format address
-  const getAddress = (order: any): string => {
-    const address = order.address || order.shippingAddress || order.shipping;
-    if (!address) return "No address available";
-    if (typeof address === "string") return address;
-    if (typeof address === "object") {
-      const { street, barangay, city, province, postalCode } = address;
-      return [street, barangay, city, province, postalCode]
-        .filter(Boolean)
-        .join(", ");
-    }
-    return "No address";
-  };
-
-  // 🔹 Format date
-  const formatDate = (timestamp?: { seconds: number; nanoseconds: number }) => {
-    if (!timestamp) return "N/A";
-    const date = new Date(timestamp.seconds * 1000);
-    return date.toLocaleString();
-  };
+  const TabButton = ({
+    tab,
+    label,
+  }: {
+    tab: "orders" | "pickups";
+    label: string;
+  }) => (
+    <button
+      onClick={() => {
+        setActiveTab(tab);
+        setSidebarOpen(false);
+      }}
+      className={`w-full px-4 py-2 rounded-xl text-left font-semibold transition ${
+        activeTab === tab
+          ? "bg-blue-500 text-white"
+          : "text-white/70 hover:bg-white/10 hover:text-white"
+      }`}
+    >
+      {label}
+    </button>
+  );
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow-xl max-w-7xl mx-auto relative min-h-screen">
+    <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
+      {/* Mobile menu button */}
       <button
-        onClick={handleLogout}
-        className="fixed bottom-6 right-6 bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-full font-semibold shadow-lg transition md:top-6 md:right-6 md:bottom-auto"
+        onClick={() => setSidebarOpen(true)}
+        className="md:hidden fixed top-4 left-4 z-40 rounded-xl border border-white/10 bg-white/10 backdrop-blur px-3 py-2 shadow-lg"
       >
-        Logout
+        <Menu size={22} />
       </button>
 
-      <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">
-        Staff Dashboard
-      </h1>
+      {/* Sidebar (desktop + mobile drawer) */}
+      <aside
+        className={`fixed z-30 md:static top-0 left-0 h-full w-72 md:w-64
+          bg-white/5 backdrop-blur-xl border-r border-white/10 p-6
+          transform transition-transform duration-300
+          ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+        `}
+      >
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-2xl font-extrabold tracking-tight">Staff Panel</h2>
 
-      {isLoading && <p className="text-gray-600">Loading orders...</p>}
-      {error && (
-        <p className="text-red-600 bg-red-50 border border-red-200 rounded-md p-3 mb-4">
-          {error}
-        </p>
-      )}
-
-      {!isLoading && !error && (
-        <div className="overflow-x-auto">
-          {orders.length > 0 ? (
-            <table className="min-w-full border border-gray-200 rounded-lg">
-              <thead className="bg-blue-600 text-white">
-                <tr>
-                  <th className="py-3 px-4 text-left text-sm font-semibold">
-                    Order ID
-                  </th>
-                  <th className="py-3 px-4 text-left text-sm font-semibold">
-                    Customer
-                  </th>
-                  <th className="py-3 px-4 text-left text-sm font-semibold">
-                    Address
-                  </th>
-                  <th className="py-3 px-4 text-left text-sm font-semibold">
-                    Total
-                  </th>
-                  <th className="py-3 px-4 text-left text-sm font-semibold">
-                    Date
-                  </th>
-                  <th className="py-3 px-4 text-left text-sm font-semibold">
-                    Status
-                  </th>
-                  <th className="py-3 px-4 text-left text-sm font-semibold">
-                    Driver
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="text-gray-800">
-                {orders.map((order) => (
-                  <tr
-                    key={order.id}
-                    className="border-b hover:bg-gray-50 transition duration-150"
-                  >
-                    <td className="py-3 px-4 font-medium">{order.id}</td>
-                    <td className="py-3 px-4">{getCustomerName(order)}</td>
-                    <td className="py-3 px-4 text-sm">{getAddress(order)}</td>
-                    <td className="py-3 px-4 text-sm">₱{order.total}</td>
-                    <td className="py-3 px-4 text-sm">
-                      {formatDate(order.createdAt)}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`text-xs font-semibold px-3 py-1 rounded-full ${getStatusColor(
-                          order.status
-                        )}`}
-                      >
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      {order.status === "pending" ||
-                      order.status === "Placed" ? (
-                        drivers.length > 0 ? (
-                          <select
-                            onChange={(e) => {
-                              const selectedDriver = drivers.find(
-                                (d) => d.uid === e.target.value
-                              );
-                              if (selectedDriver)
-                                handleAssignDriver(order.id, selectedDriver);
-                            }}
-                            defaultValue=""
-                            className="p-2 border border-gray-300 rounded-md text-sm"
-                          >
-                            <option value="" disabled>
-                              Select driver...
-                            </option>
-                            {drivers.map((driver) => (
-                              <option key={driver.uid} value={driver.uid}>
-                                {driver.displayName || "Unnamed Driver"}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="text-sm text-gray-500 italic">
-                            No drivers available
-                          </span>
-                        )
-                      ) : (
-                        <span className="font-semibold text-gray-700">
-                          {order.driverName || "Assigned"}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="p-10 text-center border-2 border-dashed border-gray-300 rounded-lg text-gray-500">
-              <p className="font-semibold">No orders available</p>
-              <p className="text-sm">Check back later for new orders.</p>
-            </div>
-          )}
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="md:hidden text-white/70 hover:text-white"
+          >
+            <X size={22} />
+          </button>
         </div>
-      )}
+
+        <nav className="space-y-2">
+          <TabButton tab="orders" label="Orders" />
+          <TabButton tab="pickups" label="Pickups" />
+        </nav>
+
+        <p className="mt-auto pt-6 text-xs text-white/40">
+          Touch Up • Staff Console
+        </p>
+      </aside>
+
+      {/* Main */}
+      <main className="flex-1 p-6 md:ml-0 overflow-y-auto">
+        {/* Top header with logout (UPPER RIGHT) */}
+        <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="ml-12 md:ml-0">
+            <h1 className="text-3xl font-extrabold tracking-tight">
+              Staff Dashboard
+            </h1>
+            <p className="text-sm text-white/60">
+              Manage orders, pickups, and driver assignments
+            </p>
+          </div>
+
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center gap-2 rounded-xl bg-red-500/80 hover:bg-red-500 px-4 py-2 font-semibold transition shadow"
+          >
+            <LogOut size={18} />
+            Logout
+          </button>
+        </header>
+
+        {/* Content */}
+        {loading ? (
+          <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 text-white/70">
+            Loading data…
+          </div>
+        ) : (
+          <>
+            {activeTab === "orders" && <OrdersTab orders={orders} drivers={drivers} />}
+            {activeTab === "pickups" && <PickupsTab pickups={pickups} drivers={drivers} />}
+          </>
+        )}
+      </main>
     </div>
   );
 };

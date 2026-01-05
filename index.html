@@ -4,19 +4,49 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Touch Up</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+
     <style>
+      /* ✅ Make the whole app background dark like Driver Dashboard */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #111827; /* Tailwind gray-900 */
+      }
+
+      /* Optional: smooth font rendering */
+      body {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* ✅ Dark canvas behind everything */
       #particle-canvas {
         position: fixed;
-        top: 0;
-        left: 0;
+        inset: 0;
         width: 100%;
         height: 100%;
         z-index: -1;
-        background-color: #f1f5f9;
+
+        /* dark base */
+        background: #111827; /* gray-900 */
+
+        /* subtle depth like modern dashboards */
+        background-image:
+          radial-gradient(800px 500px at 10% 10%, rgba(59, 130, 246, 0.12), transparent 60%),
+          radial-gradient(700px 450px at 90% 20%, rgba(99, 102, 241, 0.10), transparent 55%),
+          radial-gradient(900px 600px at 50% 90%, rgba(16, 185, 129, 0.06), transparent 60%);
+      }
+
+      /* ✅ Ensure your app content stays above */
+      #root {
+        position: relative;
+        z-index: 1;
+        min-height: 100vh;
       }
     </style>
   </head>
+
   <body class="antialiased">
     <div id="root"></div>
     <canvas id="particle-canvas"></canvas>
@@ -26,91 +56,86 @@
 
     <!-- Particle animation (keep this) -->
     <script>
-       const canvas = document.getElementById('particle-canvas');
-        const ctx = canvas.getContext('2d');
-        let particles = [];
-        const numParticles = 80;
-        const color = '#3b82f6'; // Tailwind blue-500 color
-        const maxVelocity = 0.5;
+      const canvas = document.getElementById("particle-canvas");
+      const ctx = canvas.getContext("2d");
+      let particles = [];
+      const numParticles = 80;
+      const color = "#3b82f6"; // Tailwind blue-500 color
+      const maxVelocity = 0.5;
 
-        // Set initial canvas size
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+      function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+
+      class Particle {
+        constructor() {
+          this.x = Math.random() * canvas.width;
+          this.y = Math.random() * canvas.height;
+          this.radius = Math.random() * 1.5 + 0.5;
+          this.vx = (Math.random() - 0.5) * maxVelocity;
+          this.vy = (Math.random() - 0.5) * maxVelocity;
+          this.color = color;
         }
 
-        class Particle {
-            constructor() {
-                this.x = Math.random() * canvas.width;
-                this.y = Math.random() * canvas.height;
-                this.radius = Math.random() * 1.5 + 0.5; // Small dots
-                this.vx = (Math.random() - 0.5) * maxVelocity;
-                this.vy = (Math.random() - 0.5) * maxVelocity;
-                this.color = color;
-            }
-
-            draw() {
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = this.color;
-                ctx.fill();
-            }
-
-            update() {
-                this.x += this.vx;
-                this.y += this.vy;
-
-                // Keep particles within bounds
-                if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
-                if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
-            }
+        draw() {
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+          ctx.fillStyle = this.color;
+          ctx.fill();
         }
 
-        // Initialize particles
-        function init() {
-            particles = [];
-            for (let i = 0; i < numParticles; i++) {
-                particles.push(new Particle());
-            }
+        update() {
+          this.x += this.vx;
+          this.y += this.vy;
+
+          if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+          if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
         }
+      }
 
-        // Animation Loop
-        function animate() {
-            requestAnimationFrame(animate);
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            for (let i = 0; i < particles.length; i++) {
-                particles[i].update();
-                particles[i].draw();
-
-                // Connect nearby particles with lines (optional but cool)
-                for (let j = i + 1; j < particles.length; j++) {
-                    const dx = particles[i].x - particles[j].x;
-                    const dy = particles[i].y - particles[j].y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-
-                    if (distance < 100) {
-                        ctx.strokeStyle = `rgba(59, 130, 246, ${1 - distance / 100})`;
-                        ctx.lineWidth = 0.2;
-                        ctx.beginPath();
-                        ctx.moveTo(particles[i].x, particles[i].y);
-                        ctx.lineTo(particles[j].x, particles[j].y);
-                        ctx.stroke();
-                    }
-                }
-            }
+      function init() {
+        particles = [];
+        for (let i = 0; i < numParticles; i++) {
+          particles.push(new Particle());
         }
+      }
 
-        window.addEventListener('load', () => {
-            resizeCanvas();
-            init();
-            animate();
-        });
+      function animate() {
+        requestAnimationFrame(animate);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        window.addEventListener('resize', () => {
-            resizeCanvas();
-            init(); // Re-initialize particles on resize for better density
-        });
+        for (let i = 0; i < particles.length; i++) {
+          particles[i].update();
+          particles[i].draw();
+
+          for (let j = i + 1; j < particles.length; j++) {
+            const dx = particles[i].x - particles[j].x;
+            const dy = particles[i].y - particles[j].y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < 100) {
+              ctx.strokeStyle = `rgba(59, 130, 246, ${1 - distance / 100})`;
+              ctx.lineWidth = 0.2;
+              ctx.beginPath();
+              ctx.moveTo(particles[i].x, particles[i].y);
+              ctx.lineTo(particles[j].x, particles[j].y);
+              ctx.stroke();
+            }
+          }
+        }
+      }
+
+      window.addEventListener("load", () => {
+        resizeCanvas();
+        init();
+        animate();
+      });
+
+      window.addEventListener("resize", () => {
+        resizeCanvas();
+        init();
+      });
     </script>
   </body>
 </html>

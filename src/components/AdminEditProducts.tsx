@@ -12,18 +12,17 @@ interface Product {
   id: string;
   name: string;
   price: number;
-  category?: string;
+  stock: number;
+  productType?: string;
   description?: string;
   image?: string;
-  imageURL?: string;
+  createdAt?: any;
 }
 
 const AdminEditProducts: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [selected, setSelected] = useState<Product | null>(null);
-  const [edited, setEdited] = useState<Partial<Product>>({
-    image: "",
-  });
+  const [edited, setEdited] = useState<Partial<Product>>({});
 
   // ✅ Load all products in real time
   useEffect(() => {
@@ -46,19 +45,27 @@ const AdminEditProducts: React.FC = () => {
     setEdited({
       name: product.name || "",
       price: product.price || 0,
-      category: product.category || "",
+      stock: product.stock || 0,
+      productType: product.productType || "",
       description: product.description || "",
-      image: product.image || product.imageURL || "",
+      image: product.image || "",
     });
   };
 
   // ✅ Save edits
   const handleSave = async () => {
     if (!selected) return;
+
+    if (edited.price! < 0 || edited.stock! < 0) {
+      alert("⚠️ Price and stock must be non-negative values.");
+      return;
+    }
+
     try {
       const updateData = {
         ...edited,
-        image: edited.image || "",
+        stock: Number(edited.stock) || 0,
+        price: Number(edited.price) || 0,
       };
       await updateDoc(doc(db, "products", selected.id), updateData);
       alert("✅ Product updated successfully!");
@@ -84,57 +91,93 @@ const AdminEditProducts: React.FC = () => {
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-md">
-      <h2 className="text-xl font-bold mb-4 text-gray-800">
-        🧰 Manage Products
-      </h2>
-
       {!selected ? (
-        <ul className="divide-y divide-gray-200">
-          {products.map((p) => (
-            <li
-              key={p.id}
-              className="py-3 flex justify-between items-center hover:bg-gray-50 transition px-2"
-            >
-              <div className="flex items-center gap-3">
-                {p.image || p.imageURL ? (
-                  <img
-                    src={p.image || p.imageURL}
-                    alt={p.name}
-                    className="w-12 h-12 object-cover rounded-md border"
-                  />
-                ) : (
-                  <div className="w-12 h-12 bg-gray-200 rounded-md flex items-center justify-center text-gray-400 text-xs">
-                    No Image
-                  </div>
-                )}
-                <div>
-                  <p className="font-medium text-gray-800">{p.name}</p>
-                  <p className="text-gray-600 text-sm">₱{p.price.toFixed(2)}</p>
-                </div>
-              </div>
+        <>
+          <h2 className="text-xl font-bold mb-4 text-gray-800">
+            🧰 Manage Products & Stocks
+          </h2>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleEditClick(p)}
-                  className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleDelete(p.id)}
-                  className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition"
-                >
-                  Delete
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+          {products.some((p) => p.stock <= 5) && (
+            <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 px-4 py-2 rounded-lg mb-4">
+              ⚠️ Some products are low in stock! Please restock soon.
+            </div>
+          )}
+
+          <ul className="divide-y divide-gray-200">
+            {products.map((p) => (
+              <li
+                key={p.id}
+                className="py-3 flex justify-between items-center hover:bg-gray-50 transition px-2"
+              >
+                <div className="flex items-center gap-3">
+                  {p.image ? (
+                    <img
+                      src={p.image}
+                      alt={p.name}
+                      className="w-12 h-12 object-cover rounded-md border"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 bg-gray-200 rounded-md flex items-center justify-center text-gray-400 text-xs">
+                      No Image
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-medium text-gray-800">{p.name}</p>
+                    <p className="text-gray-600 text-sm">
+                      ₱{p.price.toFixed(2)} • Stock:{" "}
+                      <span
+                        className={`font-semibold ${
+                          p.stock <= 5
+                            ? "text-red-600"
+                            : "text-gray-800"
+                        }`}
+                      >
+                        {p.stock ?? 0}
+                      </span>
+                    </p>
+                    {p.createdAt && (
+                      <p className="text-xs text-gray-400">
+                        Added:{" "}
+                        {new Date(
+                          p.createdAt.seconds * 1000
+                        ).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleEditClick(p)}
+                    className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(p.id)}
+                    className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       ) : (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-700">
-            ✏️ Editing Product: <span className="text-blue-600">{selected.name}</span>
-          </h3>
+        <>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-700">
+              ✏️ Editing Product:{" "}
+              <span className="text-blue-600">{selected.name}</span>
+            </h3>
+            <button
+              onClick={() => setSelected(null)}
+              className="text-sm text-gray-500 hover:underline"
+            >
+              ← Back to list
+            </button>
+          </div>
 
           {/* --- FORM --- */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -159,38 +202,67 @@ const AdminEditProducts: React.FC = () => {
               </label>
               <input
                 type="number"
+                min={0}
                 value={edited.price ?? 0}
                 onChange={(e) =>
-                  setEdited({ ...edited, price: parseFloat(e.target.value) })
+                  setEdited({
+                    ...edited,
+                    price: parseFloat(e.target.value),
+                  })
                 }
-                placeholder="Price"
                 className="border p-2 w-full rounded"
               />
             </div>
 
-            {/* Category */}
+            {/* Stock Quantity */}
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-1">
-                Category
+                Stock Quantity
+              </label>
+              <input
+                type="number"
+                min={0}
+                value={edited.stock ?? 0}
+                onChange={(e) =>
+                  setEdited({
+                    ...edited,
+                    stock: parseInt(e.target.value),
+                  })
+                }
+                className="border p-2 w-full rounded"
+              />
+            </div>
+
+            {/* Product Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                Product Type
               </label>
               <input
                 type="text"
-                value={edited.category ?? ""}
-                onChange={(e) => setEdited({ ...edited, category: e.target.value })}
-                placeholder="Category"
+                value={edited.productType ?? ""}
+                onChange={(e) =>
+                  setEdited({
+                    ...edited,
+                    productType: e.target.value,
+                  })
+                }
+                placeholder="e.g. item, service"
                 className="border p-2 w-full rounded"
               />
             </div>
 
             {/* Image URL */}
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-600 mb-1">
                 Image URL
               </label>
               <input
                 type="url"
                 value={edited.image ?? ""}
-                onChange={(e) => setEdited({ ...edited, image: e.target.value })}
+                onChange={(e) =>
+                  setEdited({ ...edited, image: e.target.value })
+                }
                 placeholder="https://example.com/image.jpg"
                 className="border p-2 w-full rounded"
               />
@@ -204,8 +276,9 @@ const AdminEditProducts: React.FC = () => {
             </label>
             <textarea
               value={edited.description ?? ""}
-              onChange={(e) => setEdited({ ...edited, description: e.target.value })}
-              placeholder="Product description"
+              onChange={(e) =>
+                setEdited({ ...edited, description: e.target.value })
+              }
               className="border p-2 w-full rounded min-h-[80px]"
             />
           </div>
@@ -248,7 +321,7 @@ const AdminEditProducts: React.FC = () => {
               Delete
             </button>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
