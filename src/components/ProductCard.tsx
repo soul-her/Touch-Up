@@ -88,7 +88,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   };
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-[0_20px_60px_-35px_rgba(0,0,0,0.8)] transition hover:-translate-y-0.5 hover:bg-white/7">
+    <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-[0_20px_60px_-35px_rgba(0,0,0,0.8)] transition-all transform hover:scale-105 hover:-translate-y-1 hover:bg-white/7 hover:shadow-[0_25px_75px_-25px_rgba(0,0,0,1)]">
       {/* subtle glow */}
       <div
         aria-hidden="true"
@@ -99,7 +99,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         {/* Top row */}
         <div className="flex items-start justify-between gap-3">
           <div
-            className={`flex h-14 w-14 items-center justify-center rounded-2xl border ${iconBgClass}`}
+            className={`flex h-14 w-14 items-center justify-center rounded-2xl border transition-transform transform group-hover:scale-110 group-hover:rotate-6 ${iconBgClass}`}
           >
             <IconComponent />
           </div>
@@ -140,7 +140,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               <button
                 onClick={handleAddToCart}
                 disabled={!canAddToCart || isBusy}
-                className={`px-4 py-2 rounded-xl font-semibold text-white transition shadow-sm border ${
+                className={`px-4 py-2 rounded-xl font-semibold text-white transition transform hover:scale-105 shadow-sm border ${
                   !canAddToCart
                     ? "bg-white/10 border-white/10 opacity-60 cursor-not-allowed"
                     : isAdded

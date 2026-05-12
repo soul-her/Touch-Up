@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { Menu, X } from "lucide-react";
 
-type Tab = "orders" | "products" | "containers" | "sales";
+type Tab = "orders" | "products" | "containers" | "sales" | "reviews";
 
 interface Props {
   activeTab: Tab;
@@ -14,6 +14,7 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "products", label: "Products" },
   { id: "containers", label: "Containers" },
   { id: "sales", label: "Sales" },
+  { id: "reviews", label: "Reviews" },
 ];
 
 const ManagerSidebar: React.FC<Props> = ({ activeTab, setActiveTab }) => {

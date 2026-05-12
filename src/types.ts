@@ -22,10 +22,12 @@ export interface User {
 }
 
 // User as stored in the database
+// types.ts
 export interface DBUser extends User {
   role: UserRole;
   shippingAddress?: ShippingAddress; // legacy profile address (optional)
 }
+
 
 // Product and Cart types
 interface Product {
@@ -38,7 +40,6 @@ interface Product {
   stock?: number;
   createdAt?: any; // Firestore Timestamp
 }
-
 
 export interface CartItem extends Product {
   quantity: number;
@@ -66,6 +67,7 @@ export interface ShippingAddress {
   address: string;
   city: string;
   zip: string;
+  phone?: string;
 }
 
 // ─────────────────────────────────────────────
@@ -180,5 +182,25 @@ export interface Notification {
   message: string;
   details: string;
   status: NotificationStatus;
+  createdAt: firebase.firestore.Timestamp;
+}
+
+// ─────────────────────────────────────────────
+// REVIEW/SURVEY TYPES
+// ─────────────────────────────────────────────
+
+export interface Review {
+  id: string;
+  orderId: string;
+  userId: string;
+  customerName?: string;
+  rating: number; // 1-5 stars
+  comment: string;
+  categories?: {
+    productQuality?: number;
+    deliverySpeed?: number;
+    driverBehavior?: number;
+    overallExperience?: number;
+  };
   createdAt: firebase.firestore.Timestamp;
 }

@@ -22,6 +22,7 @@ interface Order {
   userId: string;
   driverId?: string;
   createdAt?: any;
+  phone?: string; // Add phone field to the order
 }
 
 interface DriverOrdersProps {
@@ -162,32 +163,31 @@ const DriverOrders: React.FC<DriverOrdersProps> = ({ currentUser }) => {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-xs text-white/50">Order ID</p>
-                    <p className="font-semibold text-white break-all">
-                      {o.id}
-                    </p>
+                    <p className="font-semibold text-white break-all">{o.id}</p>
                   </div>
 
-                  <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${statusPill(o.status)}`}>
+                  <span
+                    className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${statusPill(o.status)}`}
+                  >
                     {o.status}
                   </span>
                 </div>
 
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-white/80">
                   <p>
-                    <span className="font-semibold text-white">Customer:</span>{" "}
-                    {customer}
+                    <span className="font-semibold text-white">Customer:</span> {customer}
                   </p>
                   <p>
-                    <span className="font-semibold text-white">Date:</span>{" "}
-                    {date}
+                    <span className="font-semibold text-white">Date:</span> {date}
                   </p>
                   <p className="md:col-span-2">
-                    <span className="font-semibold text-white">Address:</span>{" "}
-                    {addr}
+                    <span className="font-semibold text-white">Address:</span> {addr}
                   </p>
                   <p>
-                    <span className="font-semibold text-white">Time:</span>{" "}
-                    {time}
+                    <span className="font-semibold text-white">Phone:</span> {o.phone || "—"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-white">Time:</span> {time}
                   </p>
                 </div>
 

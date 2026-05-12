@@ -16,7 +16,7 @@ const HistorySection: React.FC = () => {
 
         <div className="space-y-16">
           {/* Milestone 1 */}
-          <div className="flex flex-col md:flex-row items-start md:justify-between w-full md:space-x-12">
+          <div className="flex flex-col md:flex-row items-start md:justify-between w-full md:space-x-12 transition-all hover:bg-blue-50/30 p-4 rounded-lg">
             <div className="md:w-1/2 p-4 md:text-right">
               <h3 className="text-xl font-semibold text-gray-700">
                 The Founding Idea
@@ -28,7 +28,7 @@ const HistorySection: React.FC = () => {
             </div>
 
             <div className="md:w-1/2 p-4 relative flex items-center md:justify-start gap-3 md:gap-4">
-              <span className="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-md z-10">
+              <span className="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-md z-10 hover:scale-110 transition-transform">
                 <i className="fas fa-home text-xs"></i>
               </span>
               <p className="text-blue-500 font-bold text-lg">2018</p>
@@ -36,7 +36,7 @@ const HistorySection: React.FC = () => {
           </div>
 
           {/* Milestone 2 */}
-          <div className="flex flex-col md:flex-row-reverse items-start md:justify-between w-full md:space-x-12">
+          <div className="flex flex-col md:flex-row-reverse items-start md:justify-between w-full md:space-x-12 transition-all hover:bg-blue-50/30 p-4 rounded-lg">
             <div className="md:w-1/2 p-4 md:text-left">
               <h3 className="text-xl font-semibold text-gray-700">
                 Logistics & Technology Investment
@@ -52,14 +52,14 @@ const HistorySection: React.FC = () => {
               <p className="text-blue-500 font-bold text-lg md:text-right">
                 2020
               </p>
-              <span className="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-md z-10">
+              <span className="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-md z-10 hover:scale-110 transition-transform">
                 <i className="fas fa-truck text-xs"></i>
               </span>
             </div>
           </div>
 
           {/* Milestone 3 */}
-          <div className="flex flex-col md:flex-row items-start md:justify-between w-full md:space-x-12">
+          <div className="flex flex-col md:flex-row items-start md:justify-between w-full md:space-x-12 transition-all hover:bg-blue-50/30 p-4 rounded-lg">
             <div className="md:w-1/2 p-4 md:text-right">
               <h3 className="text-xl font-semibold text-gray-700">
                 The Sustainability Pledge
@@ -72,10 +72,33 @@ const HistorySection: React.FC = () => {
             </div>
 
             <div className="md:w-1/2 p-4 relative flex items-center md:justify-start gap-3 md:gap-4">
-              <span className="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-md z-10">
+              <span className="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-md z-10 hover:scale-110 transition-transform">
                 <i className="fas fa-recycle text-xs"></i>
               </span>
               <p className="text-blue-500 font-bold text-lg">2023</p>
+            </div>
+          </div>
+
+          {/* Milestone 4 - 2026 */}
+          <div className="flex flex-col md:flex-row-reverse items-start md:justify-between w-full md:space-x-12 transition-all hover:bg-blue-50/30 p-4 rounded-lg">
+            <div className="md:w-1/2 p-4 md:text-left">
+              <h3 className="text-xl font-semibold text-gray-700">
+                Digital Transformation
+              </h3>
+              <p className="text-gray-500 text-sm">
+                Touch Up launched its new mobile app and expanded operations, 
+                becoming the leading water delivery service with real-time tracking and 
+                innovative delivery solutions for our satisfied customers.
+              </p>
+            </div>
+
+            <div className="md:w-1/2 p-4 relative flex items-center md:justify-end gap-3 md:gap-4">
+              <p className="text-blue-500 font-bold text-lg md:text-right">
+                2026
+              </p>
+              <span className="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-md z-10 hover:scale-110 transition-transform">
+                <i className="fas fa-rocket text-xs"></i>
+              </span>
             </div>
           </div>
         </div>

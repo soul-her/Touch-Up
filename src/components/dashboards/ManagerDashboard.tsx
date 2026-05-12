@@ -9,8 +9,9 @@ import ManagerOrders from "./ManagerOrders";
 import ManagerProducts from "./ManagerProducts";
 import ManagerContainers from "./ManagerContainers";
 import ManagerSales from "./ManagerSales";
+import ManagerReviews from "./ManagerReviews";
 
-type Tab = "orders" | "products" | "containers" | "sales";
+type Tab = "orders" | "products" | "containers" | "sales" | "reviews";
 
 interface ManagerDashboardProps {
   currentUser: AppUser | null;
@@ -43,6 +44,7 @@ const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
             {activeTab === "products" && <ManagerProducts />}
             {activeTab === "containers" && <ManagerContainers />}
             {activeTab === "sales" && <ManagerSales />}
+            {activeTab === "reviews" && <ManagerReviews />}
           </div>
         </section>
       </main>

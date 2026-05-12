@@ -89,9 +89,15 @@ const Header: React.FC<HeaderProps> = ({ setView, currentUser, userRole }) => {
                 setView("products");
                 setActiveSection(null);
               }}
-              className="text-3xl font-bold text-blue-600 hover:text-blue-700 transition-colors duration-300"
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity duration-300"
             >
-              Touch Up
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <span className="text-2xl text-white">💧</span>
+              </div>
+              <div className="flex flex-col items-start">
+                <span className="text-2xl font-bold text-blue-600">Touch Up</span>
+                <span className="text-xs text-blue-500 font-medium">Premium Water Delivery</span>
+              </div>
             </button>
 
             {/* Navigation */}
@@ -165,12 +171,13 @@ const Header: React.FC<HeaderProps> = ({ setView, currentUser, userRole }) => {
               {/* Cart */}
               <button
                 onClick={() => setView("cart")}
-                className="relative text-gray-600 hover:text-black transition-colors"
-                style={{ transform: "scale(0.8)" }}
+                className="relative text-gray-600 hover:text-blue-600 transition-colors p-2 rounded-lg hover:bg-blue-50"
               >
-                <ShoppingCartIcon />
+                <div style={{ transform: "scale(1.5)" }}>
+                  <ShoppingCartIcon />
+                </div>
                 {itemCount > 0 && (
-                  <span className="absolute -top-1 -right-2 flex items-center justify-center w-4 h-4 bg-blue-500 text-white text-[10px] rounded-full">
+                  <span className="absolute top-0 right-0 flex items-center justify-center w-5 h-5 bg-blue-500 text-white text-[11px] font-bold rounded-full">
                     {itemCount}
                   </span>
                 )}
@@ -180,9 +187,11 @@ const Header: React.FC<HeaderProps> = ({ setView, currentUser, userRole }) => {
               <div className="relative" ref={profileMenuRef}>
                 <button
                   onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                  className="text-gray-600 hover:text-black transition-colors"
+                  className="text-gray-600 hover:text-blue-600 transition-colors p-2 rounded-lg hover:bg-blue-50"
                 >
-                  <UserIcon />
+                  <div style={{ transform: "scale(1.5)" }}>
+                    <UserIcon />
+                  </div>
                 </button>
 
                 {isProfileMenuOpen && (

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
-import type { DBUser } from "../../types";
 import { db } from "../../firebase";
-import { updateDoc, doc } from "firebase/firestore";
+import { updateDoc, doc, serverTimestamp } from "firebase/firestore";
+import type { DBUser } from "../../types";
 
 interface Props {
   pickups: any[];
@@ -51,6 +51,35 @@ const PickupsTab: React.FC<Props> = ({ pickups, drivers }) => {
       setError(err?.message || "Failed to assign driver.");
     } finally {
       setSavingId("");
+    }
+  };
+
+  const cancelPickup = async (pickupId: string) => {
+    try {
+      // Prevent cancellation if already completed or picked up
+      const pickup = pickups.find((p) => p.id === pickupId);
+      if (!pickup) return;
+
+      if (pickup.status === "Picked Up" || pickup.status === "Completed") {
+        alert("This pickup cannot be cancelled as it is already completed or picked up.");
+        return;
+      }
+
+      // Update the pickup status to "Cancelled"
+      await updateDoc(doc(db, "pickups", pickupId), {
+        status: "Cancelled",
+        cancelledAt: serverTimestamp(),
+      });
+
+      // Update local state to reflect cancellation
+      const updatedPickups = pickups.map((p) =>
+        p.id === pickupId ? { ...p, status: "Cancelled" } : p
+      );
+      setSavingId("");
+      alert("Pickup successfully cancelled.");
+    } catch (err) {
+      console.error("Cancel pickup failed:", err);
+      setError("Failed to cancel pickup.");
     }
   };
 
@@ -147,6 +176,7 @@ const PickupsTab: React.FC<Props> = ({ pickups, drivers }) => {
                   ) : hasDriver ? (
                     <p className="text-sm text-white/80">
                       <span className="font-semibold text-white">Driver:</span>{" "}
+
                       {p.driverName || p.driverId}
                     </p>
                   ) : (
@@ -183,6 +213,16 @@ const PickupsTab: React.FC<Props> = ({ pickups, drivers }) => {
                   {isBusy ? (
                     <span className="text-sm text-white/60">Saving…</span>
                   ) : null}
+
+                  {/* Cancel Pickup Button */}
+                  {p.status !== "Cancelled" && !locked && (
+                    <button
+                      onClick={() => cancelPickup(p.id)}
+                      className="px-3 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700"
+                    >
+                      Cancel Pickup
+                    </button>
+                  )}
                 </div>
               </div>
             );

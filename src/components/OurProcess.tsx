@@ -9,10 +9,10 @@ const OurProcess: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {/* Step 1 */}
-        <div className="process-step text-center relative">
+        <div className="process-step text-center relative group hover:scale-105 transition-transform">
           <div className="step-number">1</div>
           <div className="h-10"></div>
-          <i className="fas fa-shopping-basket text-4xl text-blue-500 mb-4"></i>
+          <div className="text-5xl mb-4">🛒</div>
           <h3 className="font-semibold text-xl mb-2 text-gray-700">
             Place Your Order
           </h3>
@@ -25,10 +25,10 @@ const OurProcess: React.FC = () => {
         </div>
 
         {/* Step 2 */}
-        <div className="process-step text-center relative">
+        <div className="process-step text-center relative group hover:scale-105 transition-transform">
           <div className="step-number">2</div>
           <div className="h-10"></div>
-          <i className="fas fa-money-check-alt text-4xl text-blue-500 mb-4"></i>
+          <div className="text-5xl mb-4">💳</div>
           <h3 className="font-semibold text-xl mb-2 text-gray-700">
             Secure Payment
           </h3>
@@ -41,10 +41,10 @@ const OurProcess: React.FC = () => {
         </div>
 
         {/* Step 3 */}
-        <div className="process-step text-center relative">
+        <div className="process-step text-center relative group hover:scale-105 transition-transform">
           <div className="step-number">3</div>
           <div className="h-10"></div>
-          <i className="fas fa-truck-moving text-4xl text-blue-500 mb-4"></i>
+          <div className="text-5xl mb-4">🚚</div>
           <h3 className="font-semibold text-xl mb-2 text-gray-700">
             Scheduled Delivery
           </h3>
@@ -57,10 +57,10 @@ const OurProcess: React.FC = () => {
         </div>
 
         {/* Step 4 */}
-        <div className="process-step text-center relative">
+        <div className="process-step text-center relative group hover:scale-105 transition-transform">
           <div className="step-number">4</div>
           <div className="h-10"></div>
-          <i className="fas fa-hand-holding-water text-4xl text-blue-500 mb-4"></i>
+          <div className="text-5xl mb-4">💧</div>
           <h3 className="font-semibold text-xl mb-2 text-gray-700">
             Stay Hydrated
           </h3>

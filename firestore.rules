@@ -1,0 +1,195 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==============================
+    // HELPERS
+    // ==============================
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
+        : {};
+    }
+
+    function userRole() {
+      return userDoc().role != null ? userDoc().role : "customer";
+    }
+
+    function isAdmin()   { return userRole() == "admin"; }
+    function isManager() { return userRole() == "manager"; }
+    function isStaff()   { return userRole() == "staff" || isManager(); }
+    function isDriver()  { return userRole() == "driver"; }
+    function isOwner(userId) { return request.auth.uid == userId; }
+
+    // ==============================
+    // PRODUCTS
+    // ==============================
+    match /products/{productId} {
+      allow read: if true;
+      allow create, delete: if isLoggedIn() && isAdmin();
+      allow update: if isLoggedIn()
+        && (isAdmin() || isManager())
+        && request.resource.data.diff(resource.data)
+            .changedKeys()
+            .hasOnly(["name","price","stock","description","image","productType"]);
+    }
+
+    // ==============================
+    // USERS
+    // ==============================
+    match /users/{userId} {
+      // owner can create/read/update own profile
+      allow create: if isLoggedIn() && isOwner(userId);
+      allow read, update: if isLoggedIn() && isOwner(userId);
+
+      // staff can read any user
+      allow read: if isLoggedIn() && isStaff();
+
+      // admin can write/delete any user
+      allow write, delete: if isLoggedIn() && isAdmin();
+    }
+
+    // ==============================
+    // ORDERS
+    // ==============================
+    match /orders/{orderId} {
+      // Customer creates their own order
+      allow create: if isLoggedIn() && request.resource.data.userId == request.auth.uid;
+
+      // Customer can read their own order
+      allow get, list: if isLoggedIn() && resource.data.userId == request.auth.uid;
+
+      // Customer can request pickup (denormalized fields only)
+      allow update: if isLoggedIn() 
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(["pickupRequested", "pickupRequestedAt", "pickupId"]);
+
+      // Staff / Manager / Admin full access to read and write orders
+      allow read, write: if isLoggedIn() && (isAdmin() || isManager() || isStaff());
+
+      // Driver can only read/list assigned orders
+      allow get, list: if isLoggedIn() 
+        && isDriver() 
+        && resource.data.driverId == request.auth.uid;
+
+      // Driver can update only status and container pickup on assigned orders
+      allow update: if isLoggedIn()
+        && isDriver()
+        && resource.data.driverId == request.auth.uid
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(["status", "isContainerPickedUp"]);
+
+      allow update: if isLoggedIn()
+        && resource.data.userId == request.auth.uid
+        && userRole() == "customer"
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(["status"])
+        && (
+          // cancel allowed only if NOT yet delivered/completed/cancelled
+          (
+            request.resource.data.status == "cancelled"
+            && !(resource.data.status in ["delivered", "completed", "cancelled"])
+          )
+          // mark completed/received only after delivered
+          || (
+            request.resource.data.status in ["completed", "received"]
+            && resource.data.status == "delivered"
+          )
+        );
+    }
+
+    // ==============================
+    // PICKUPS
+    // ==============================
+    match /pickups/{pickupId} {
+      // Customer creates pickup for self
+      allow create: if isLoggedIn()
+        && request.resource.data.userId == request.auth.uid;
+
+      // Customer reads own pickup
+      allow read: if isLoggedIn()
+        && resource.data.userId == request.auth.uid;
+
+      // Staff/Manager/Admin full access
+      allow read, write: if isLoggedIn()
+        && (isAdmin() || isManager() || isStaff());
+
+      // Driver reads assigned pickups
+      allow read: if isLoggedIn()
+        && isDriver()
+        && resource.data.driverId == request.auth.uid;
+
+      // Driver can update ONLY status + completedAt on assigned pickups
+      allow update: if isLoggedIn()
+        && isDriver()
+        && resource.data.driverId == request.auth.uid
+        && request.resource.data.diff(resource.data).changedKeys()
+            .hasOnly(["status","completedAt"]);
+    }
+
+    // ==============================
+    // CONTAINER PICKUPS
+    // ==============================
+    match /containerPickups/{id} {
+      // Admins, Managers, and Staff have full access
+      allow read: if isLoggedIn() && (isAdmin() || isManager() || isStaff());
+
+      // Drivers can read all available container pickups
+      allow read: if isLoggedIn() && isDriver();
+    }
+
+    // ==============================
+    // REVIEWS
+    // ==============================
+    match /reviews/{reviewId} {
+      // Customers can create their own reviews
+      allow create: if isLoggedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.orderId != null
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.comment != null
+        && request.resource.data.comment != "";
+
+      // Allow seller feedback creation (orderId == "seller_feedback") - no auth required
+      allow create: if request.resource.data.orderId == "seller_feedback"
+        && request.resource.data.userId != null
+        && request.resource.data.userId != ""
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.comment != null
+        && request.resource.data.comment != "";
+
+      // Anyone can read reviews (no auth required)
+      allow read: if true;
+
+      // Customers can update their own reviews (limited fields)
+      allow update: if isLoggedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).changedKeys()
+            .hasOnly(["rating", "comment", "categories"]);
+
+      // Managers and admins can read, update, delete any review
+      allow read, update, delete: if isLoggedIn()
+        && (isAdmin() || isManager());
+
+      // Customers cannot delete their own reviews (only managers/admins can)
+      allow delete: if isLoggedIn()
+        && (isAdmin() || isManager());
+    }
+
+    // ==============================
+    // NOTIFICATIONS
+    // ==============================
+    match /notifications/{notifId} {
+      allow create: if isLoggedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow read: if isLoggedIn()
+        && resource.data.userId == request.auth.uid;
+      allow read, write: if isLoggedIn()
+        && (isAdmin() || isManager() || isStaff());
+    }
+  }
+}

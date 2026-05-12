@@ -21,8 +21,10 @@ const CartView: React.FC<CartViewProps> = ({ setView }) => {
   } = useCart();
 
   const subtotal = getCartTotal();
-  const shippingCost = 0; // FREE Shipping
-  const total = subtotal + shippingCost;
+
+  // ✅ Shipping removed
+  const total = subtotal;
+
   const itemCount = getCartItemCount();
 
   // ✅ Handle empty cart
@@ -60,6 +62,7 @@ const CartView: React.FC<CartViewProps> = ({ setView }) => {
           <h2 className="text-2xl font-bold text-gray-800 mb-2 pb-4 border-b">
             Items ({itemCount})
           </h2>
+
           <div className="divide-y divide-gray-200">
             {cartItems.map((item) => (
               <div
@@ -67,7 +70,6 @@ const CartView: React.FC<CartViewProps> = ({ setView }) => {
                 className="flex items-center justify-between py-6"
               >
                 <div className="flex items-center gap-4 flex-grow">
-                  {/* ✅ Show product image instead of color box */}
                   {item.image ? (
                     <img
                       src={item.image}
@@ -117,7 +119,6 @@ const CartView: React.FC<CartViewProps> = ({ setView }) => {
                     </div>
                   </div>
 
-                  {/* ✅ Use ₱ instead of $ */}
                   <p className="font-bold text-lg w-24 text-right text-gray-800">
                     ₱{(item.price * item.quantity).toFixed(2)}
                   </p>
@@ -125,6 +126,7 @@ const CartView: React.FC<CartViewProps> = ({ setView }) => {
                   <button
                     onClick={() => removeFromCart(item.id)}
                     className="text-gray-400 hover:text-red-500 transition-colors"
+                    aria-label={`Remove ${item.name} from cart`}
                   >
                     <CloseIcon />
                   </button>
@@ -141,6 +143,7 @@ const CartView: React.FC<CartViewProps> = ({ setView }) => {
               <ShoppingCartIcon />
               Order Summary
             </h2>
+
             <div className="space-y-3 text-lg">
               <div className="flex justify-between text-gray-600">
                 <span>Subtotal</span>
@@ -148,15 +151,13 @@ const CartView: React.FC<CartViewProps> = ({ setView }) => {
                   ₱{subtotal.toFixed(2)}
                 </span>
               </div>
-              <div className="flex justify-between text-gray-600">
-                <span>Shipping</span>
-                <span className="font-medium text-green-600">FREE</span>
-              </div>
+
               <div className="flex justify-between font-bold text-gray-800 border-t pt-4 mt-4">
                 <span>Order Total</span>
                 <span>₱{total.toFixed(2)}</span>
               </div>
             </div>
+
             <div className="mt-8">
               <button
                 onClick={() => setView("checkout")}

@@ -26,6 +26,7 @@ const SchedulePickupForm: React.FC<SchedulePickupFormProps> = ({
     address: currentUser?.shippingAddress?.address || "",
     city: currentUser?.shippingAddress?.city || "",
     zip: currentUser?.shippingAddress?.zip || "",
+    phone: currentUser?.shippingAddress?.phone || "", // Add phone number field
   });
 
   const today = useMemo(() => {
@@ -46,9 +47,10 @@ const SchedulePickupForm: React.FC<SchedulePickupFormProps> = ({
         address: currentUser.shippingAddress?.address || "",
         city: currentUser.shippingAddress?.city || "",
         zip: currentUser.shippingAddress?.zip || "",
+        phone: currentUser.shippingAddress?.phone || "", // Add phone from user data
       });
     } else {
-      setAddressForm({ fullName: "", address: "", city: "", zip: "" });
+      setAddressForm({ fullName: "", address: "", city: "", zip: "", phone: "" });
     }
   }, [currentUser]);
 
@@ -69,10 +71,11 @@ const SchedulePickupForm: React.FC<SchedulePickupFormProps> = ({
 
     if (!selectedDate || !time) return;
 
+    // Determine which address to use
     const finalAddress =
       useDifferentAddress || !currentUser?.shippingAddress
-        ? addressForm
-        : currentUser.shippingAddress;
+        ? addressForm // If user chooses a different address, use the entered address
+        : currentUser.shippingAddress; // Use the saved address if not using a different one
 
     try {
       const batch = writeBatch(db);
@@ -84,11 +87,10 @@ const SchedulePickupForm: React.FC<SchedulePickupFormProps> = ({
         orderId,
         userId: user.uid,
 
-        // keep both (your UI uses both styles)
+        // Use both styles (fullName and customerName)
         fullName: finalAddress.fullName,
         customerName: finalAddress.fullName,
 
-        // ✅ IMPORTANT: PickupsTab expects p.address.fullName
         address: {
           fullName: finalAddress.fullName,
           address: finalAddress.address,
@@ -96,6 +98,7 @@ const SchedulePickupForm: React.FC<SchedulePickupFormProps> = ({
           zip: finalAddress.zip,
         },
 
+        phone: finalAddress.phone, // Save phone number as well
         date: selectedDate.toISOString().split("T")[0],
         time,
 
@@ -112,13 +115,13 @@ const SchedulePickupForm: React.FC<SchedulePickupFormProps> = ({
 
       await batch.commit();
 
-      alert("Pickup successfully scheduled!");
+      alert("Pickup successfully scheduled!"); // Only show success message
       setSelectedDate(null);
       setTime("");
       setView("profile");
     } catch (err) {
       console.error("Schedule pickup error:", err);
-      alert("Failed to schedule pickup.");
+      // Do not show any failure messages
     }
   };
 
@@ -160,7 +163,8 @@ const SchedulePickupForm: React.FC<SchedulePickupFormProps> = ({
         Boolean(addressForm.fullName) &&
         Boolean(addressForm.address) &&
         Boolean(addressForm.city) &&
-        Boolean(addressForm.zip)
+        Boolean(addressForm.zip) &&
+        Boolean(addressForm.phone) // Ensure phone number is provided
       );
     }
     return true;
@@ -182,110 +186,147 @@ const SchedulePickupForm: React.FC<SchedulePickupFormProps> = ({
   }
 
   return (
-    <div className="bg-white p-6 sm:p-8 rounded-xl shadow-xl max-w-4xl mx-auto">
-      <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">
+    <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-6 sm:p-8 rounded-xl shadow-xl max-w-4xl mx-auto">
+      <h2 className="text-3xl font-bold text-gray-800 mb-8 text-center">
         Schedule Container Pickup
       </h2>
 
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Calendar */}
-        <div className="space-y-6">
-          <div>
-            <label className="block mb-2 text-sm font-medium text-gray-700">
-              Select a Date
-            </label>
+      <form onSubmit={handleSubmit} className="space-y-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Column: Calendar & Time */}
+          <div className="space-y-6">
+            {/* Calendar */}
+            <div>
+              <label className="block mb-4 text-sm font-bold text-gray-800 uppercase tracking-wide">
+                Select a Date
+              </label>
 
-            <div className="bg-gray-50 p-4 rounded-lg border">
-              <div className="flex justify-between items-center mb-4">
-                <button type="button" onClick={() => changeMonth(-1)} className="p-2 hover:bg-gray-200 rounded-full">
-                  ‹
-                </button>
-                <span className="font-semibold text-lg text-gray-800">
-                  {currentDate.toLocaleString("default", { month: "long", year: "numeric" })}
-                </span>
-                <button type="button" onClick={() => changeMonth(1)} className="p-2 hover:bg-gray-200 rounded-full">
-                  ›
-                </button>
+              <div className="bg-white p-5 rounded-xl border-2 border-gray-200">
+                <div className="flex justify-between items-center mb-5">
+                  <button 
+                    type="button" 
+                    onClick={() => changeMonth(-1)} 
+                    className="p-2 hover:bg-gray-200 rounded-full font-bold text-lg"
+                  >
+                    ‹
+                  </button>
+                  <span className="font-bold text-lg text-gray-800">
+                    {currentDate.toLocaleString("default", { month: "long", year: "numeric" })}
+                  </span>
+                  <button 
+                    type="button" 
+                    onClick={() => changeMonth(1)} 
+                    className="p-2 hover:bg-gray-200 rounded-full font-bold text-lg"
+                  >
+                    ›
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-7 gap-2">
+                  {weekDays.map((d) => (
+                    <div key={d} className="text-xs font-bold text-gray-600 uppercase text-center h-8 flex items-center justify-center">
+                      {d}
+                    </div>
+                  ))}
+
+                  {calendarDays.map((day, i) => {
+                    if (!day) return <div key={i} />;
+                    const isPast = day < today;
+                    const isSelected = selectedDate?.getTime() === day.getTime();
+
+                    return (
+                      <button
+                        key={day.toISOString()}
+                        type="button"
+                        disabled={isPast}
+                        onClick={() => handleDateSelect(day)}
+                        className={`h-10 rounded-lg font-semibold transition ${
+                          isPast
+                            ? "text-gray-300 cursor-not-allowed"
+                            : isSelected
+                            ? "bg-blue-500 text-white shadow-lg"
+                            : "bg-gray-100 text-gray-700 hover:bg-blue-100 cursor-pointer"
+                        }`}
+                      >
+                        {day.getDate()}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div className="grid grid-cols-7 gap-1 text-center">
-                {weekDays.map((d) => (
-                  <div key={d} className="text-xs font-medium text-gray-500 uppercase">{d}</div>
-                ))}
+              {selectedDate && (
+                <p className="mt-3 text-sm font-semibold text-blue-600">
+                  Selected: {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                </p>
+              )}
+            </div>
 
-                {calendarDays.map((day, i) => {
-                  if (!day) return <div key={i} />;
-                  const isPast = day < today;
-                  const isSelected = selectedDate?.getTime() === day.getTime();
-
-                  let cls = "h-9 w-9 flex items-center justify-center rounded-full text-sm transition";
-                  if (isPast) cls += " text-gray-300 cursor-not-allowed";
-                  else {
-                    cls += " cursor-pointer hover:bg-blue-100";
-                    if (isSelected) cls += " bg-blue-500 text-white font-bold";
-                  }
-
-                  return (
-                    <button
-                      key={day.toISOString()}
-                      type="button"
-                      disabled={isPast}
-                      className={cls}
-                      onClick={() => handleDateSelect(day)}
-                    >
-                      {day.getDate()}
-                    </button>
-                  );
-                })}
-              </div>
+            {/* Time Slot */}
+            <div>
+              <label className="block text-sm font-bold text-gray-800 uppercase tracking-wide mb-3">
+                Time Slot
+              </label>
+              <select
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                required
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg font-semibold text-gray-800 focus:border-blue-500 focus:outline-none bg-white"
+              >
+                <option value="">Select a time slot...</option>
+                <option value="9:00 AM - 12:00 PM">9:00 AM - 12:00 PM</option>
+                <option value="12:00 PM - 3:00 PM">12:00 PM - 3:00 PM</option>
+                <option value="3:00 PM - 6:00 PM">3:00 PM - 6:00 PM</option>
+              </select>
+              {time && (
+                <p className="mt-2 text-sm font-semibold text-green-600">
+                  ✓ Time: {time}
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Time */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Time Slot</label>
-            <select
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              required
-              className="w-full mt-1 px-3 py-2 border rounded-md"
-            >
-              <option value="">Select a time</option>
-              <option value="9:00 AM - 12:00 PM">9:00 AM - 12:00 PM</option>
-              <option value="12:00 PM - 3:00 PM">12:00 PM - 3:00 PM</option>
-              <option value="3:00 PM - 6:00 PM">3:00 PM - 6:00 PM</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Address */}
-        <div className="space-y-4">
-          <div>
-            <label className="block mb-2 text-sm font-medium text-gray-700">Pickup Address</label>
+          {/* Right Column: Address */}
+          <div className="space-y-4">
+            <label className="block text-sm font-bold text-gray-800 uppercase tracking-wide">
+              Pickup Address
+            </label>
 
             {currentUser?.shippingAddress && (
-              <div className="bg-gray-50 p-4 border rounded-lg mb-4 space-y-3">
-                <label className="flex items-start">
-                  <input type="radio" checked={!useDifferentAddress} onChange={() => setUseDifferentAddress(false)} className="mt-1" />
-                  <span className="ml-3 text-sm">
-                    <strong>Use saved address</strong>
-                    <div className="text-gray-600 mt-1">
-                      <p>{currentUser.shippingAddress.fullName}</p>
+              <div className="bg-white p-4 border-2 border-gray-200 rounded-xl space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    checked={!useDifferentAddress} 
+                    onChange={() => setUseDifferentAddress(false)} 
+                    className="mt-1 w-5 h-5 cursor-pointer"
+                  />
+                  <span className="text-sm">
+                    <p className="font-bold text-gray-800">Use saved address</p>
+                    <div className="text-gray-600 mt-2 space-y-1">
+                      <p className="font-semibold">{currentUser.shippingAddress.fullName}</p>
                       <p>{currentUser.shippingAddress.address}</p>
                       <p>{currentUser.shippingAddress.city}, {currentUser.shippingAddress.zip}</p>
                     </div>
                   </span>
                 </label>
 
-                <label className="flex items-start">
-                  <input type="radio" checked={useDifferentAddress} onChange={() => setUseDifferentAddress(true)} className="mt-1" />
-                  <span className="ml-3 text-sm font-medium text-gray-900">Use a different address</span>
+                <hr className="my-3" />
+
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    checked={useDifferentAddress} 
+                    onChange={() => setUseDifferentAddress(true)} 
+                    className="mt-1 w-5 h-5 cursor-pointer"
+                  />
+                  <span className="font-bold text-gray-800">Use a different address</span>
                 </label>
               </div>
             )}
 
             {(useDifferentAddress || !currentUser?.shippingAddress) && (
-              <div className="p-4 border rounded-lg space-y-3">
+              <div className="bg-white p-4 border-2 border-gray-200 rounded-xl space-y-3">
                 <input
                   type="text"
                   name="fullName"
@@ -293,7 +334,7 @@ const SchedulePickupForm: React.FC<SchedulePickupFormProps> = ({
                   required
                   value={addressForm.fullName}
                   onChange={handleAddressInputChange}
-                  className="w-full px-3 py-2 border rounded"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
                 />
                 <input
                   type="text"
@@ -302,9 +343,9 @@ const SchedulePickupForm: React.FC<SchedulePickupFormProps> = ({
                   required
                   value={addressForm.address}
                   onChange={handleAddressInputChange}
-                  className="w-full px-3 py-2 border rounded"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
                 />
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-3">
                   <input
                     type="text"
                     name="city"
@@ -312,7 +353,7 @@ const SchedulePickupForm: React.FC<SchedulePickupFormProps> = ({
                     required
                     value={addressForm.city}
                     onChange={handleAddressInputChange}
-                    className="px-3 py-2 border rounded"
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
                   />
                   <input
                     type="text"
@@ -321,20 +362,41 @@ const SchedulePickupForm: React.FC<SchedulePickupFormProps> = ({
                     required
                     value={addressForm.zip}
                     onChange={handleAddressInputChange}
-                    className="px-3 py-2 border rounded"
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
                   />
                 </div>
+                <input
+                  type="text"
+                  name="phone"
+                  placeholder="Phone Number"
+                  required
+                  value={addressForm.phone}
+                  onChange={handleAddressInputChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
               </div>
             )}
           </div>
+        </div>
 
+        {/* Submit Button - Always Visible at Bottom */}
+        <div className="pt-6 border-t-2 border-gray-200">
           <button
             type="submit"
             disabled={!isFormValid}
-            className="w-full bg-green-600 text-white py-3 rounded-lg font-bold disabled:opacity-50"
+            className={`w-full py-4 px-6 text-lg font-bold rounded-xl transition-all ${
+              isFormValid
+                ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:shadow-xl hover:scale-105 transform cursor-pointer"
+                : "bg-gray-300 text-gray-600 cursor-not-allowed opacity-60"
+            }`}
           >
-            Confirm Pickup
+            {isFormValid ? "✓ Confirm Pickup" : "Complete form to continue"}
           </button>
+          {!isFormValid && (
+            <p className="mt-3 text-sm text-gray-600 text-center">
+              {!selectedDate ? "📅 Please select a date" : !time ? "⏰ Please select a time" : "📍 Please complete the address"}
+            </p>
+          )}
         </div>
       </form>
     </div>

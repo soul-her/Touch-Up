@@ -1,126 +1,80 @@
-// src/components/dashboards/ManagerContainers.tsx
-import React, { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import React, { useEffect, useState, useMemo } from "react";
 import { db } from "../../firebase";
+import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
 
-const CONTAINER_PRODUCT_NAME = "New Container";
-
-type Product = {
+// Pickup interface
+interface Pickup {
   id: string;
-  name: string;
-  stock?: number;
-};
-
-type Order = {
-  id: string;
-  status?: string;
-};
-
-type ContainerPickupLog = {
-  id: string;
-  driverId?: string;
-  status?: string;
-};
+  status: string;
+  driverName?: string;
+  customerName?: string;
+  address?: string;
+  city?: string;
+  zip?: string;
+  date?: string;
+  time?: string;
+  userId?: string;
+  createdAt: any;
+}
 
 const ManagerContainers: React.FC = () => {
-  const [inventory, setInventory] = useState<Product | null>(null);
-  const [deliveredOrders, setDeliveredOrders] = useState<Order[]>([]);
-  const [pickupLogs, setPickupLogs] = useState<ContainerPickupLog[]>([]);
-  const [error, setError] = useState("");
+  const [pickups, setPickups] = useState<Pickup[]>([]);
+  const [error, setError] = useState<string>("");
 
-  // Inventory
+  // Status filtering
+  const [selectedStatus, setSelectedStatus] = useState<string>("Picked Up");
+
+  // Fetch pickups with dynamic status filtering
   useEffect(() => {
-    const qInv = query(
-      collection(db, "products"),
-      where("name", "==", CONTAINER_PRODUCT_NAME)
+    const q = query(
+      collection(db, "pickups"),
+      where("status", "==", selectedStatus), // Filter based on selected status
+      orderBy("createdAt", "desc") // Order by createdAt time
     );
 
-    return onSnapshot(
-      qInv,
+    const unsubscribe = onSnapshot(
+      q,
       (snap) => {
-        if (snap.empty) {
-          setInventory(null);
-          return;
-        }
-        const d = snap.docs[0];
-        setInventory({ id: d.id, ...(d.data() as any) });
+        const fetchedPickups = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Pickup),
+        }));
+        setPickups(fetchedPickups);
       },
-      (err) => setError(err.message)
-    );
-  }, []);
-
-  // Delivered orders
-  useEffect(() => {
-    const qOrders = query(
-      collection(db, "orders"),
-      where("status", "==", "Delivered")
+      (err) => {
+        console.error(err);
+        setError("Failed to load pickups.");
+      }
     );
 
-    return onSnapshot(
-      qOrders,
-      (snap) =>
-        setDeliveredOrders(
-          snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))
-        ),
-      (err) => setError(err.message)
-    );
-  }, []);
+    return () => unsubscribe(); // Cleanup subscription on component unmount
+  }, [selectedStatus]);
 
-  // Container pickup logs
-  useEffect(() => {
-    const qLogs = query(
-      collection(db, "containerPickups"),
-      where("status", "==", "Completed")
-    );
+  // Total Picked Up Containers
+  const totalPickedUp = useMemo(() => {
+    return pickups.filter((pickup) => pickup.status === "Picked Up").length;
+  }, [pickups]);
 
-    return onSnapshot(
-      qLogs,
-      (snap) =>
-        setPickupLogs(
-          snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))
-        ),
-      (err) => setError(err.message)
-    );
-  }, []);
-
-  // Stats
-  const stats = useMemo(() => {
-    const totalWeHave = inventory?.stock ?? 0;
-    const issued = deliveredOrders.length;
-    const pickedUp = pickupLogs.length;
-    const inUse = Math.max(0, issued - pickedUp);
-
-    const byDriver: Record<string, number> = {};
-    pickupLogs.forEach((l) => {
-      const id = l.driverId || "Unknown";
-      byDriver[id] = (byDriver[id] || 0) + 1;
-    });
-
-    const leaderboard = Object.entries(byDriver)
-      .map(([driverId, count]) => ({ driverId, count }))
-      .sort((a, b) => b.count - a.count);
-
-    return { totalWeHave, issued, pickedUp, inUse, leaderboard };
-  }, [inventory, deliveredOrders, pickupLogs]);
+  // Total Containers (count all pickups regardless of status)
+  const totalContainers = useMemo(() => {
+    return pickups.length;
+  }, [pickups]);
 
   return (
     <section className="text-white space-y-8">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight">
-            Container Overview
-          </h2>
-          <p className="text-sm text-white/60">
-            Inventory, issued containers, and returns
-          </p>
+          <h2 className="text-3xl font-extrabold tracking-tight">Container Overview</h2>
+          <p className="text-sm text-white/60">Picked up containers and all containers</p>
         </div>
 
         <span className="text-xs px-3 py-1 rounded-full bg-white/10 border border-white/10 text-white/70">
-          Product: {CONTAINER_PRODUCT_NAME}
+          {totalContainers} total containers
         </span>
       </div>
 
+      {/* Error message */}
       {error && (
         <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-200">
           {error}
@@ -128,51 +82,58 @@ const ManagerContainers: React.FC = () => {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-        {[
-          { label: "Stock Available", value: stats.totalWeHave },
-          { label: "Issued (Delivered)", value: stats.issued },
-          { label: "Picked Up", value: stats.pickedUp, color: "text-green-400" },
-          { label: "In Use", value: stats.inUse, color: "text-yellow-400" },
-        ].map((s) => (
-          <div
-            key={s.label}
-            className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5 shadow"
-          >
-            <p className="text-sm text-white/60">{s.label}</p>
-            <p className={`text-3xl font-bold ${s.color ?? ""}`}>
-              {s.value}
-            </p>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+        <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5 shadow">
+          <p className="text-sm text-white/60">Total Picked Up</p>
+          <p className="text-3xl font-extrabold text-green-400">{totalPickedUp}</p>
+          <p className="text-xs text-white/40 mt-2">Based on containers marked as "Picked Up"</p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5 shadow">
+          <p className="text-sm text-white/60">Total Containers</p>
+          <p className="text-3xl font-extrabold text-white">{totalContainers}</p>
+          <p className="text-xs text-white/40 mt-2">Containers with status "Picked Up" or others</p>
+        </div>
       </div>
 
-      {/* Leaderboard */}
+      {/* Pickup Records */}
       <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 shadow">
-        <h3 className="text-lg font-semibold mb-4">
-          Picked Up per Driver
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">Pickup Records</h3>
+          <span className="text-xs text-white/50">Showing {pickups.length} container(s)</span>
+        </div>
 
-        {stats.leaderboard.length === 0 ? (
-          <p className="text-white/60 text-sm">
-            No container pickup logs yet.
-          </p>
+        {/* Filter Dropdown */}
+        <div className="mb-5">
+          <label htmlFor="status" className="text-sm text-white/60">Filter by Status</label>
+          <select
+            id="status"
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+          >
+            <option value="Picked Up">Picked Up</option>
+            <option value="Pending">Pending</option>
+            <option value="On the Way">On the Way</option>
+          </select>
+        </div>
+
+        {pickups.length === 0 ? (
+          <p className="text-white/60">No container pickups found.</p>
         ) : (
-          <div className="divide-y divide-white/10">
-            {stats.leaderboard.map((r) => (
-              <div
-                key={r.driverId}
-                className="flex items-center justify-between py-3"
-              >
-                <span className="text-sm text-white/80 truncate">
-                  {r.driverId}
-                </span>
-                <span className="font-bold text-white">
-                  {r.count}
-                </span>
-              </div>
+          <ul className="divide-y divide-white/10">
+            {pickups.map((pickup) => (
+              <li key={pickup.id} className="py-3 flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm text-white/80 truncate">Pickup ID: {pickup.id}</p>
+                  <p className="text-xs text-white/40">{pickup.status}</p>
+                </div>
+                <p className="font-bold text-white">
+                  {pickup.driverName || "Unnamed Driver"}
+                </p>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </div>
     </section>
